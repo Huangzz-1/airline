@@ -1,0 +1,9 @@
+@if($checkout && $checkout->status==='READY')
+@if($checkout->method==='BANK')
+@php($bank=json_decode($checkout->bank_details,true))
+<h3>Chuyển khoản ngân hàng</h3><dl class="checkout-details"><dt>Ngân hàng</dt><dd>{{ $bank['name'] }}</dd><dt>Số tài khoản</dt><dd><strong>{{ $bank['account_number'] }}</strong></dd><dt>Chủ tài khoản</dt><dd>{{ $bank['account_name'] }}</dd><dt>Số tiền</dt><dd>{{ $ui::money($booking->amount) }}</dd><dt>Nội dung chuyển khoản</dt><dd><strong>{{ $bank['content'] }}</strong></dd></dl>
+@if($checkout->mode==='mock')<p class="subtle">Thông tin ngân hàng thử nghiệm. Không chuyển tiền thật.</p>@endif
+<p class="subtle">Chuyển đúng số tiền và nội dung. Vé được xuất sau khi tài chính đối chiếu khoản tiền nhận được.</p>
+@if(!$checkout->reported_at)<form method="post" action="/journeys/{{ $booking->id }}/transfer-report">@csrf<label class="form-label" for="transfer-reference">Mã giao dịch chuyển khoản của bạn</label><input class="form-control mb-3" id="transfer-reference" name="reference" minlength="6" maxlength="120" required><button class="btn btn-primary">Tôi đã chuyển khoản</button></form>@else<p class="alert alert-info">Đã nhận thông tin chuyển khoản. Đang chờ tài chính xác nhận.</p>@endif
+@elseif($checkout->pay_url)<p class="alert alert-info">Tiếp tục thanh toán tại {{ $checkout->method==='VNPAY'?'VNPay':'MoMo' }}. Vé được xuất sau khi cổng thanh toán xác nhận kết quả.</p>@if($checkout->mode==='mock' || str_contains($checkout->pay_url,'sandbox.') || str_contains($checkout->pay_url,'test-payment.'))<p class="subtle">Đây là giao dịch thử nghiệm, không thu tiền thật.</p>@endif<a class="btn btn-primary mb-3" href="{{ $checkout->pay_url }}" rel="noreferrer">Thanh toán qua {{ $checkout->method==='VNPAY'?'VNPay':'MoMo' }}</a>@endif
+@else<p class="alert alert-info">Đang chuẩn bị thanh toán. Vui lòng cập nhật trạng thái sau ít phút. Chỗ của bạn đang được giữ trong khi chờ kết quả.</p>@endif

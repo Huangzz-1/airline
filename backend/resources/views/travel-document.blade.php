@@ -1,0 +1,11 @@
+@extends('layouts.app')
+@section('title', $kind==='ticket'?'Vé điện tử · Airline Smart':'Thẻ lên tàu · Airline Smart')
+@section('content')
+<div class="document-toolbar d-flex gap-2 mb-4"><button class="btn btn-primary" type="button" data-print>In / Lưu PDF</button><a class="btn btn-outline-primary" href="{{ auth()->user()->role==='passenger'?'/journeys/'.$b->id:'/staff/passengers?q='.urlencode($b->reference) }}">Quay lại hành trình</a></div>
+<article class="card-surface travel-document"><div class="eyebrow">Airline Smart</div><h1>{{ $kind==='ticket'?'Vé điện tử':'Thẻ lên tàu bay' }}</h1>
+@if(!in_array($mode,['gateway','live']))<p class="eyebrow">Chứng từ thử nghiệm</p>@endif
+<div class="document-grid"><div><small class="subtle">Hành khách</small><h2>{{ $passenger->name }}</h2><p>Mã đặt chỗ <strong>{{ $b->reference }}</strong></p><p>Số vé {{ $ticket->number }}</p></div><div><small class="subtle">Chuyến bay</small><h2>{{ $f->number }}</h2><p>{{ \App\Support\Ui::date($f->departure,'d/m/Y') }}</p><span class="badge-state">{{ \App\Support\Ui::label($b->status) }}</span></div></div>
+<hr><div class="document-grid"><div><small class="subtle">Khởi hành</small><div class="airport-code">{{ $f->origin }}</div><strong class="time">{{ \App\Support\Ui::date($f->departure,'H:i') }}</strong></div><div><small class="subtle">Điểm đến</small><div class="airport-code">{{ $f->destination }}</div><strong class="time">{{ \App\Support\Ui::date($f->arrival,'H:i') }}</strong></div></div><hr>
+@if($pass)<div class="document-grid"><div><p>Cửa lên tàu <strong>{{ $f->gate }}</strong></p><p>Ghế <strong class="airport-code">{{ $b->seat }}</strong></p><p>Cửa đóng lúc <strong>{{ \App\Support\Ui::date(\Carbon\Carbon::parse($f->departure)->subMinutes(10),'H:i') }}</strong></p></div><div class="document-qr" aria-label="Mã QR thẻ lên tàu">{!! $qr !!}</div></div>@else<p>Hạng vé <strong>{{ \App\Support\Ui::label($b->fare_class) }}</strong></p><p>Giá vé <strong>{{ \App\Support\Ui::money($b->amount) }}</strong></p><p class="subtle">Vé điện tử xác nhận hành trình. Vui lòng làm thủ tục để nhận thẻ lên tàu.</p>@endif
+<p class="subtle mt-4">Giờ hiển thị theo giờ Việt Nam. Mang giấy tờ tùy thân phù hợp và kiểm tra cửa lên tàu trước khi khởi hành.</p></article>
+@endsection

@@ -1,0 +1,13 @@
+{
+  "Verify Email Address": "Xác minh địa chỉ email",
+  "Please click the button below to verify your email address.": "Nhấn nút bên dưới để xác minh email và bắt đầu sử dụng tài khoản.",
+  "If you did not create an account, no further action is required.": "Nếu bạn không tạo tài khoản này, vui lòng bỏ qua email.",
+  "Reset Password Notification": "Đặt lại mật khẩu",
+  "Reset Password": "Đặt lại mật khẩu",
+  "You are receiving this email because we received a password reset request for your account.": "Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.",
+  "This password reset link will expire in :count minutes.": "Liên kết đặt lại mật khẩu có hiệu lực trong :count phút.",
+  "If you did not request a password reset, no further action is required.": "Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email.",
+  "Hello!": "Xin chào!",
+  "Regards,": "Trân trọng,",
+  "If you're having trouble clicking the \":actionText\" button, copy and paste the URL below\ninto your web browser:": "Nếu không nhấn được nút \":actionText\", sao chép liên kết bên dưới và mở trong trình duyệt:"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "airline-smart",
+  "private": true,
+  "scripts": {
+    "assets": "cp node_modules/bootstrap/dist/css/bootstrap.min.css backend/public/bootstrap.min.css",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {"bootstrap": "5.3.8"},
+  "devDependencies": {"@playwright/test": "1.56.1"}
+}

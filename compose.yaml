@@ -1,0 +1,87 @@
+name: airline
+x-db: &db
+  image: mysql:8.4
+  restart: unless-stopped
+  environment: &db-env
+    MYSQL_DATABASE: airline
+    MYSQL_USER: airline
+    MYSQL_PASSWORD: ${DB_PASSWORD:?Run scripts/configure.py}
+    MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Run scripts/configure.py}
+  healthcheck:
+    test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_PASSWORD" mysql -u airline -e "SELECT 1" airline']
+    interval: 3s
+    timeout: 3s
+    retries: 40
+services:
+  mailpit:
+    image: axllent/mailpit@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
+    ports: ["127.0.0.1:${MAILPIT_PORT:-8025}:8025"]
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 1000
+    volumes: [mail-data:/data]
+    restart: unless-stopped
+  db1:
+    <<: *db
+    volumes: [ops-data:/var/lib/mysql]
+  db2:
+    <<: *db
+    volumes: [commerce-data:/var/lib/mysql]
+  db3:
+    <<: *db
+    volumes: [finance-data:/var/lib/mysql]
+  app:
+    image: airline-php:dev
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /app
+    command: [php, artisan, serve, --host=0.0.0.0, --port=8000, --no-reload]
+    volumes: &app-volumes [./backend:/app, "${AIRLINE_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/run/airline/ca-bundle.pem:ro"]
+    ports: ["127.0.0.1:${APP_PORT:-8000}:8000"]
+    environment: &app-environment
+      APP_KEY: ${APP_KEY}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: db2
+      DB1_HOST: db1
+      DB3_HOST: db3
+      PAYMENTS_CA_BUNDLE: /run/airline/ca-bundle.pem
+      SSL_CERT_FILE: /run/airline/ca-bundle.pem
+    depends_on:
+      db1: {condition: service_healthy}
+      db2: {condition: service_healthy}
+      db3: {condition: service_healthy}
+  worker:
+    image: airline-php:dev
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /app
+    volumes: *app-volumes
+    environment:
+      APP_KEY: ${APP_KEY}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: db2
+      DB1_HOST: db1
+      DB3_HOST: db3
+      PAYMENTS_CA_BUNDLE: /run/airline/ca-bundle.pem
+      SSL_CERT_FILE: /run/airline/ca-bundle.pem
+    command: [php, artisan, airline:work]
+    depends_on:
+      app: {condition: service_started}
+    restart: unless-stopped
+  mail-worker:
+    image: airline-php:dev
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /app
+    volumes: *app-volumes
+    environment: *app-environment
+    command: [php, artisan, queue:work, database, --queue=mail, --sleep=2, --tries=5, --timeout=30, --max-time=3600]
+    depends_on:
+      app: {condition: service_started}
+      mailpit: {condition: service_started}
+    restart: unless-stopped
+volumes:
+  ops-data:
+  commerce-data:
+  finance-data:
+  mail-data:

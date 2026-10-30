@@ -1,0 +1,51 @@
+services:
+  e2e:
+    image: airline-php:dev
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: [php, artisan, serve, --host=0.0.0.0, --port=8000, --no-reload]
+    working_dir: /app
+    volumes: [./backend:/app, "${AIRLINE_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/run/airline/ca-bundle.pem:ro"]
+    ports: ["127.0.0.1:8001:8000"]
+    environment: &test-environment
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:8001
+      APP_KEY: ${APP_KEY}
+      DB_DATABASE: airline_test
+      DB_USERNAME: airline_test
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: db2
+      DB1_HOST: db1
+      DB3_HOST: db3
+      CACHE_STORE: array
+      PAYMENT_SIMULATOR_ENABLED: "true"
+      BANK_TRANSFER_ENABLED: "true"
+      BANK_NAME: "Ngân hàng kiểm thử"
+      BANK_ACCOUNT_NUMBER: "000000000000"
+      BANK_ACCOUNT_NAME: "AIRLINE TEST"
+      PAYMENTS_CA_BUNDLE: /run/airline/ca-bundle.pem
+      SSL_CERT_FILE: /run/airline/ca-bundle.pem
+    depends_on:
+      db1: {condition: service_healthy}
+      db2: {condition: service_healthy}
+      db3: {condition: service_healthy}
+
+  e2e-worker:
+    image: airline-php:dev
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /app
+    command: [php, artisan, airline:work]
+    volumes: [./backend:/app, "${AIRLINE_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/run/airline/ca-bundle.pem:ro"]
+    environment: *test-environment
+    depends_on:
+      e2e: {condition: service_started}
+
+  e2e-mail-worker:
+    image: airline-php:dev
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /app
+    command: [php, artisan, queue:work, database, --queue=mail, --sleep=1, --tries=3, --timeout=30]
+    volumes: [./backend:/app, "${AIRLINE_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/run/airline/ca-bundle.pem:ro"]
+    environment: *test-environment
+    depends_on:
+      e2e: {condition: service_started}
+      mailpit: {condition: service_started}

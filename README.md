@@ -34,6 +34,8 @@ curl --fail http://127.0.0.1:8000/health/ready
 
 ## Khởi tạo người quản trị và dữ liệu kinh doanh
 
+Để có bộ dữ liệu đầy đủ phục vụ kiểm thử trên local (22 sân bay, đội tàu, tổ bay, lịch sử và 14 ngày lịch bay, hành khách, vé, hành lý, thanh toán và hồ sơ chờ duyệt), xem [Bộ dữ liệu thử nghiệm](docs/demo-data.md). Lệnh này chỉ chạy khi được gọi riêng, dùng thanh toán mock và giữ nguyên dữ liệu hiện có.
+
 Bản local đã có quản trị viên đầu tiên với credential ngẫu nhiên trong `backend/.env` (`LOCAL_ADMIN_EMAIL`, `LOCAL_ADMIN_PASSWORD`). Đăng nhập và đổi mật khẩu tạm thời. Setup không đặt lại tài khoản đã tồn tại. Có thể chủ động khởi tạo tài khoản ngoài local bằng CLI `php artisan airline:user EMAIL --role=admin` với mật khẩu nhập ẩn.
 
 Sau đó đăng nhập, tạo tài khoản nhân viên trong **Quản lý tài khoản**. Các vai trò và sân bay được chọn từ danh sách; nhân viên đổi mật khẩu tạm thời khi đăng nhập lần đầu. Khách hàng tự đăng ký tài khoản, không tự cấp quyền nhân viên.

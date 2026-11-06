@@ -81,7 +81,7 @@ final class ReservationEdits
         $d = $this->input($data);
 
         return $this->locked($id, function ($r, $bookings) use ($u, $d) {
-            abort_unless($r->user_id === $u->id, 404);
+            abort_unless((int) $r->user_id === (int) $u->id, 404);
             $p = DB::table('reservation_passengers')->where('reservation_id', $r->id)->where('id', $d['passenger_id'])->lockForUpdate()->first() ?? abort(404);
             $after = ['passenger' => $d['passenger'], 'contact' => $d['contact']];
             $old = DB::table('passenger_revisions')->find($d['request_id']);
@@ -111,7 +111,7 @@ final class ReservationEdits
 
         return $this->locked($base->reservation_id, function ($r, $bookings) use ($u, $id, $approve, $note) {
             $change = DB::table('passenger_revisions')->where('id', $id)->lockForUpdate()->first();
-            abort_if($change->requested_by === $u->id, 409, 'Cần nhân viên duyệt độc lập.');
+            abort_if((int) $change->requested_by === (int) $u->id, 409, 'Cần nhân viên duyệt độc lập.');
             $status = $approve ? 'APPROVED' : 'REJECTED';
             if ($change->status !== 'PENDING') {
                 abort_unless($change->status === $status, 409, 'Yêu cầu đã được xử lý.');

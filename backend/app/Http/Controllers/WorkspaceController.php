@@ -185,7 +185,7 @@ class WorkspaceController extends Controller
             $ids = $ops->table('flights')->where('origin', $u->airport_code)->orWhere('destination', $u->airport_code)->pluck('id');
             $bookings = DB::table('bookings')->whereIn('flight_id', $ids)->pluck('id');
                 $dataset('Hành lý thuộc sân bay', $q = DB::table('baggage')->whereIn('booking_id', $bookings), ['id' => 'ID', 'tag' => 'Mã thẻ hành lý', 'booking_id' => 'Mã đặt chỗ', 'weight' => 'Khối lượng (kg)', 'status' => 'Trạng thái', 'custody' => 'Đang giữ']);
-                $form('bag_tag', 'Tạo thẻ hành lý', [$f('booking_id', 'Mã đặt chỗ (UUID)'), $f('weight', 'Khối lượng (kg)', 'number'), $f('request_id', 'request_id', 'uuid')]);
+                $form('bag_tag', 'Tạo thẻ hành lý', [$f('booking_id', 'Hành khách / mã đặt chỗ (UUID)'), $f('weight', 'Trọng lượng kg', 'number'), $f('request_id', 'request_id', 'uuid')]);
             $form('bag_scan', 'Quét và bàn giao', [$f('event_id', 'event_id', 'uuid'), $f('tag', 'Bag Tag'), $f('flight_id', 'ID chuyến', 'number'), $f('status', 'Mốc', 'select', array_combine(['ACCEPTED', 'SCREENED', 'LOADED', 'TRANSFERRED', 'DELIVERED', 'MISHANDLED', 'OFFLOADED'], ['Tiếp nhận', 'Soi chiếu', 'Xếp tàu', 'Chuyển tiếp', 'Giao trả', 'Bất thường', 'Dỡ khỏi tàu'])), $f('location', 'Điểm quét'), $f('custody', 'Đơn vị nhận bàn giao')]);
         }
         if ($section === 'customer') {

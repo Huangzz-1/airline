@@ -191,7 +191,7 @@ final class FinanceOperations
             $db = $this->db();
             $db->table('payments')->where('booking_id', $base->booking_id)->lockForUpdate()->first();
             $a = $db->table('financial_adjustments')->where('id', $id)->lockForUpdate()->first();
-            abort_if($a->created_by === $u->id, 409, 'Người duyệt phải khác người lập phiếu.');
+            abort_if((int) $a->created_by === (int) $u->id, 409, 'Người duyệt phải khác người lập phiếu.');
             $status = $approve ? 'APPROVED' : 'REJECTED';
             if ($a->status !== 'PENDING') {
                 abort_unless($a->status === $status, 409, 'Phiếu đã có quyết định khác.');

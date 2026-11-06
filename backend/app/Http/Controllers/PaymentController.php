@@ -43,6 +43,7 @@ class PaymentController extends Controller
         $d = $r->validate(['intent_id' => 'required|uuid', 'approve' => 'required|boolean', 'reference' => 'nullable|string|between:6,120']);
         $service->decideBank($r->user(), $d['intent_id'], (bool) $d['approve'], $d['reference'] ?? null);
         $relay->drain();
+        $relay->drain();
 
         return back()->with('message', 'Đã ghi nhận kết quả đối chiếu chuyển khoản.');
     }

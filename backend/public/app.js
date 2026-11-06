@@ -373,6 +373,18 @@ document.querySelectorAll('[data-flight-search]').forEach((form) => {
 
 document.querySelectorAll('[data-print]').forEach((button) => button.addEventListener('click', () => window.print()));
 
+// Passenger forms are grouped in native <details> panels. Saving a panel is
+// a local interaction; collapse it immediately so the next passenger is easy
+// to review without submitting the whole trip form.
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-save-trip-person]');
+  if (!button) return;
+  const panel = button.closest('[data-trip-person]');
+  if (!panel) return;
+  panel.open = false;
+  panel.querySelector('[data-person-saved]')?.replaceChildren(document.createTextNode('Đã lưu'));
+});
+
 document.querySelectorAll('[data-camera-scan]').forEach((button) => button.addEventListener('click', async () => {
   const area = document.querySelector('[data-scanner]');
   const status = area?.querySelector('[data-scanner-status]');

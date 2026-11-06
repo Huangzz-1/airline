@@ -43,6 +43,9 @@ class MockPaymentController extends Controller
             $gateway->momo($p);
         }
         $relay->drain();
+        // PaymentResult is emitted while the finance queue is being drained;
+        // run a second pass so the booking and ticket are updated in this request.
+        $relay->drain();
 
         return redirect($i->reservation_id ? '/reservations/'.$i->reservation_id : '/journeys/'.$i->booking_id)->with('message', $success ? 'Thanh toán thử nghiệm thành công.' : 'Thanh toán thử nghiệm bị từ chối.');
     }

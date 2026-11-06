@@ -190,7 +190,7 @@ class PortalController extends Controller
         $d = $r->validate(['flight_id' => 'required|integer', 'token' => 'required|string|size:64']);
         $result = $service->board($r->user(), (int) $d['flight_id'], $d['token']);
 
-        return $r->expectsJson() ? response()->json($result) : back()->withInput(['flight_id' => $d['flight_id']])->with('message', 'Đã xác nhận hành khách lên tàu: '.$result->reference.' · '.$result->seat);
+        return $r->expectsJson() ? response()->json($result) : back()->withInput(['flight_id' => $d['flight_id']])->with('message', 'Đã xác nhận boarding · Hành khách '.$result->reference.' · ghế '.$result->seat);
     }
 
     public function staff(Request $r)

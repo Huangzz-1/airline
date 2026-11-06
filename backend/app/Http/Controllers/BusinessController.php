@@ -234,6 +234,7 @@ class BusinessController extends Controller
         };
         if ($action === 'statement_confirm') {
             app(OutboxRelay::class)->drain();
+            app(OutboxRelay::class)->drain();
         }
         if ($r->expectsJson()) {
             return response()->json($result);

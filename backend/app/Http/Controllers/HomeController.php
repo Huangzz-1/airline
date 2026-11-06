@@ -10,6 +10,10 @@ class HomeController extends Controller
 {
     public function index(Request $r, FlightCatalog $catalog)
     {
+        if ($r->user() && $r->user()->role !== 'passenger') {
+            return redirect('/staff');
+        }
+
         $routes = DB::connection('ops')->table('routes')->where('active', true)->whereColumn('origin', '<>', 'destination')->get(['origin', 'destination']);
         $stats = [
             'airports' => $routes->flatMap(fn ($route) => [$route->origin, $route->destination])->unique()->count(),

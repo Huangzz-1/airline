@@ -198,7 +198,10 @@ class FlightSearch
 
     private function filterFlight(object $original, array $filters): ?object
     {
-        if (! empty($filters['carriers']) && ! array_intersect($original->carrier_codes, $filters['carriers'])) {
+        // A carrier filter applies to the complete itinerary.  A mixed-carrier
+        // self-transfer must only be shown when every operating carrier is
+        // explicitly selected, otherwise the result is misleading.
+        if (! empty($filters['carriers']) && array_diff($original->carrier_codes, $filters['carriers'])) {
             return null;
         }
         if (! empty($filters['stops']) && ! in_array((string) $original->stop_count, array_map('strval', $filters['stops']), true)) {

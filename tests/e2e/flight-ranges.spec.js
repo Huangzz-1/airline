@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test');
 const {php}=require('./helpers');
 let date;
-test.beforeAll(()=>{date=php(`$start=now('Asia/Ho_Chi_Minh')->addDay()->startOfDay();(new Database\\Seeders\\MarketplaceFlightSeeder)->generate($start,1);echo $start->toDateString();`);});
+test.beforeAll(()=>{date=php(`$start=now('Asia/Ho_Chi_Minh')->nextWeekday()->startOfDay();(new Database\\Seeders\\MarketplaceFlightSeeder)->generate($start,1);echo $start->toDateString();`);});
 const query=()=> '/?'+new URLSearchParams({origin:'HAN',destination:'SGN',date,'carriers[0]':'VN','fare_classes[0]':'ECONOMY'});
 const ready=page=>expect(page.locator('[data-flight-search-results]')).toHaveAttribute('aria-busy','false');
 const domains=page=>page.locator('[data-flight-range]').evaluateAll(groups=>Object.fromEntries(groups.map(group=>[group.dataset.flightRange,{min:Number(group.querySelector('[data-range-bound=min]').min),max:Number(group.querySelector('[data-range-bound=max]').max)}])));

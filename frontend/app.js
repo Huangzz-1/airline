@@ -219,9 +219,13 @@ document.querySelectorAll('[data-flight-search]').forEach((form) => {
     results?.setAttribute('aria-busy', String(busy));
     results?.querySelectorAll('[data-trip-choose], [data-flight-fare]').forEach((control) => { control.disabled = busy; });
   };
+  const lockResultSelection = () => {
+    results?.querySelectorAll('[data-trip-choose], [data-flight-fare]').forEach((control) => { control.disabled = true; });
+  };
   const refresh = async (url, historyMode = 'replace') => {
     controller?.abort();
     const requestController = new AbortController();
+    let failed = false;
     controller = requestController;
     const filtersWereOpen = results?.querySelector('.flight-filters')?.classList.contains('is-open') ?? false;
     setBusy(true);
@@ -248,9 +252,17 @@ document.querySelectorAll('[data-flight-search]').forEach((form) => {
       if (historyMode !== 'none') history[historyMode === 'push' ? 'pushState' : 'replaceState']({}, '', `${url.pathname}${url.search}`);
       message('');
     } catch (error) {
-      if (error.name !== 'AbortError') message(error.message, true);
+      if (error.name !== 'AbortError') {
+        failed = true;
+        message(error.message, true);
+      }
     } finally {
-      if (controller === requestController) setBusy(false);
+      if (controller === requestController) {
+        setBusy(false);
+        // Keep stale cards visible for context, but prevent booking a result
+        // that was not confirmed by the failed refresh.
+        if (failed) lockResultSelection();
+      }
     }
   };
   const search = () => {

@@ -5,7 +5,7 @@ test.beforeAll(() => {
   fixture = JSON.parse(php(`
     $db=Illuminate\\Support\\Facades\\DB::connection('ops');
     $db->table('routes')->updateOrInsert(['origin'=>'DAD','destination'=>'HAN'],['active'=>true,'duration_minutes'=>90,'distance_km'=>700]);
-    $prefix='ASFS'.strtoupper(substr(uniqid(),-6)); $date=now('Asia/Ho_Chi_Minh')->addDay()->toDateString(); $rows=[];
+    $prefix='ASFS'.strtoupper(substr(uniqid(),-6)); $date=now('Asia/Ho_Chi_Minh')->nextWeekday()->toDateString(); $rows=[];
     for($i=0;$i<12;$i++){
       $type=$i%2?'ATR72':'A320';
       $plane=$db->table('aircraft')->insertGetId(['registration'=>'VN-FS'.strtoupper(substr(uniqid(),-7)),'type'=>$type,'capacity'=>12,'status'=>'AVAILABLE']);

@@ -2,7 +2,7 @@ const {test,expect}=require('@playwright/test');
 const {php,continueTripPreview}=require('./helpers');
 let dates;
 test.beforeAll(()=>{
- dates=JSON.parse(php(`$start=now('Asia/Ho_Chi_Minh')->addDay()->startOfDay();(new Database\\Seeders\\MarketplaceFlightSeeder)->generate($start,3);echo json_encode(['out'=>$start->toDateString(),'back'=>$start->copy()->addDays(2)->toDateString()]);`));
+ dates=JSON.parse(php(`$start=now('Asia/Ho_Chi_Minh')->nextWeekday()->startOfDay();(new Database\\Seeders\\MarketplaceFlightSeeder)->generate($start,3);echo json_encode(['out'=>$start->toDateString(),'back'=>$start->copy()->addDays(2)->toDateString()]);`));
 });
 const query=extra=>'/?'+new URLSearchParams({origin:'HAN',destination:'SGN',date:dates.out,...extra});
 const ready=page=>expect(page.locator('[data-flight-search-results]')).toHaveAttribute('aria-busy','false');

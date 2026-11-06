@@ -1,0 +1,12 @@
+{
+    "created": 0,
+    "preserved": 1008,
+    "start": "2026-11-04",
+    "end": "2026-11-17",
+    "carriers": {
+        "VN": "Vietnam Airlines",
+        "VJ": "Vietjet Air",
+        "QH": "Bamboo Airways",
+        "VU": "Vietravel Airlines"
+    }
+}

@@ -1,0 +1,62 @@
+{
+    "anchor": "2026-11-02T16:43:00+00:00",
+    "flights": {
+        "AS9700": {
+            "id": 982,
+            "aircraft": "VN-GRP-A320",
+            "origin": "HAN",
+            "destination": "SGN",
+            "departure": "2026-11-02T19:43:00+00:00"
+        },
+        "AS9701": {
+            "id": 983,
+            "aircraft": "VN-GRP-A320",
+            "origin": "SGN",
+            "destination": "HAN",
+            "departure": "2026-11-05T19:43:00+00:00"
+        },
+        "AS9702": {
+            "id": 984,
+            "aircraft": "VN-GRP-ATR72",
+            "origin": "HAN",
+            "destination": "SGN",
+            "departure": "2026-11-02T20:43:00+00:00"
+        },
+        "AS9703": {
+            "id": 985,
+            "aircraft": "VN-GRP-ATR72",
+            "origin": "SGN",
+            "destination": "HAN",
+            "departure": "2026-11-05T20:43:00+00:00"
+        },
+        "AS9704": {
+            "id": 986,
+            "aircraft": "VN-GRP-B787",
+            "origin": "HAN",
+            "destination": "SGN",
+            "departure": "2026-11-06T21:43:00+00:00"
+        },
+        "AS9705": {
+            "id": 987,
+            "aircraft": "VN-GRP-B787",
+            "origin": "SGN",
+            "destination": "HAN",
+            "departure": "2026-11-09T21:43:00+00:00"
+        }
+    },
+    "reservations": {
+        "ROUND_TRIP": {
+            "id": "aeee1a90-cbbc-4d9b-ab3d-5db426abb87a",
+            "reference": "GYZYUFZD",
+            "url": "http:\/\/localhost:8000\/reservations\/aeee1a90-cbbc-4d9b-ab3d-5db426abb87a",
+            "email": "demo.passenger@airline.test"
+        },
+        "MULTI_CITY": {
+            "id": "d4443d4a-2021-4437-8e4c-1402f9de069a",
+            "reference": "9UIVA5XK",
+            "url": "http:\/\/localhost:8000\/reservations\/d4443d4a-2021-4437-8e4c-1402f9de069a",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "complete": true
+}

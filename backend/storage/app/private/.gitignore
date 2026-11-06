@@ -1,2 +1,8 @@
 *
 !.gitignore
+
+# The synthetic demo fixture is intentionally shareable with local reviewers.
+!demo/
+!demo/*.csv
+!demo/*.json
+!demo/*.md

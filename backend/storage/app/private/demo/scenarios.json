@@ -1,0 +1,348 @@
+{
+    "checkin": {
+        "description": "Vé đã thanh toán, có thể check-in, chọn ghế và in vé.",
+        "data": {
+            "reference": "SHOHA8V3",
+            "booking_id": "39da67cb-0f43-4153-aa00-eb948c030418",
+            "flight": "AS9902",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "boarding": {
+        "description": "Đã check-in ghế 2A, QR còn hiệu lực để quét lên tàu; hành lý đã soi chiếu.",
+        "data": {
+            "reference": "5JBTWOOV",
+            "booking_id": "72350b05-ed42-45d3-9261-1dcf5ed86665",
+            "flight": "AS9901",
+            "baggage_tag": "BGHVB1HWWTEVHG",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "boarded": {
+        "description": "Khách đã lên tàu, QR quét lại sẽ bị từ chối.",
+        "data": {
+            "reference": "2DNR1G7A",
+            "booking_id": "38d9b853-6acf-4088-be33-3ba48ab1afdd",
+            "email": "demo.passenger.2@airline.test"
+        }
+    },
+    "mishandled": {
+        "description": "Hành lý thất lạc cần xử lý và bàn giao lại.",
+        "data": {
+            "reference": "CU1GNRY9",
+            "booking_id": "d902b30c-59ba-4bd1-9848-ade017ce4674",
+            "baggage_tag": "BGQ07LOTVTPLOL",
+            "email": "demo.passenger.3@airline.test"
+        }
+    },
+    "bank": {
+        "description": "Khách đã báo chuyển khoản, tài chính chờ đối chiếu sao kê.",
+        "data": {
+            "reference": "YXL3XW2R",
+            "booking_id": "401b1e58-5837-491d-a6da-5ce40be93e78",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "refund-requested": {
+        "description": "Hoàn tiền: requested; tài khoản nhận hoàn là dữ liệu giả.",
+        "data": {
+            "reference": "PCPUHKH3",
+            "booking_id": "a4374787-1942-4492-ba5f-d9656a6ab78f",
+            "refund_id": 1,
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "refund-approved": {
+        "description": "Hoàn tiền: approved; tài khoản nhận hoàn là dữ liệu giả.",
+        "data": {
+            "reference": "5ZWW7WJV",
+            "booking_id": "8b5bf5f7-d6da-49f6-8e39-6844e833d862",
+            "refund_id": 2,
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "refund-refunded": {
+        "description": "Hoàn tiền: refunded; tài khoản nhận hoàn là dữ liệu giả.",
+        "data": {
+            "reference": "PIWTDKW3",
+            "booking_id": "62de264d-0ac3-4f52-91b1-17b8d7b7b0b2",
+            "refund_id": 3,
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "refund-rejected": {
+        "description": "Hoàn tiền: rejected; tài khoản nhận hoàn là dữ liệu giả.",
+        "data": {
+            "reference": "QRVKSYJX",
+            "booking_id": "d5b34ca8-cdef-404d-9706-2ca0135ef160",
+            "refund_id": 4,
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "exchange-pending": {
+        "description": "Đổi vé cùng HAN–SGN: pending.",
+        "data": {
+            "reference": "4QS02NED",
+            "booking_id": "9ea0d41a-f60e-4a77-9880-823171876a14",
+            "exchange_id": "420d4b50-704c-40e0-b3a4-7287104dd386",
+            "target_booking_id": "68c2288f-0f4f-4a2c-a22a-c6fbd8cb2b79",
+            "email": "demo.passenger.2@airline.test"
+        }
+    },
+    "exchange-processing": {
+        "description": "Đổi vé cùng HAN–SGN: processing.",
+        "data": {
+            "reference": "ZK4VURQF",
+            "booking_id": "fffcebf0-6505-4dfa-9c6c-051cf3c4f004",
+            "exchange_id": "98ab2664-814a-4f66-b232-c5c11112e0f1",
+            "target_booking_id": "2eb04dae-c818-4796-9714-6f1686746934",
+            "email": "demo.passenger.2@airline.test"
+        }
+    },
+    "exchange-completed": {
+        "description": "Đổi vé cùng HAN–SGN: completed.",
+        "data": {
+            "reference": "EFPOST6K",
+            "booking_id": "73e7b2e7-3455-4a45-afef-a057589ec7d4",
+            "exchange_id": "bbb89f2f-2552-4f23-9746-5a08a3eb27dd",
+            "target_booking_id": "fade37f6-5fd8-4db2-ba61-655cd24bfe8f",
+            "email": "demo.passenger.2@airline.test"
+        }
+    },
+    "exchange-rejected": {
+        "description": "Đổi vé cùng HAN–SGN: rejected.",
+        "data": {
+            "reference": "OFPMZC3H",
+            "booking_id": "d9e186d7-5fea-4e3a-ad85-8760432d5f48",
+            "exchange_id": "f8de6d70-e34c-4ff5-b605-0f765968fd0d",
+            "target_booking_id": "fba1ff52-5a7d-4898-833e-3478a1f82ae5",
+            "email": "demo.passenger.2@airline.test"
+        }
+    },
+    "schedule-draft": {
+        "description": "Lịch DRAFT có tổ bay hợp lệ, chờ trình\/duyệt.",
+        "data": {
+            "flight": "AS9910",
+            "flight_id": 533
+        }
+    },
+    "schedule-pending": {
+        "description": "Lịch PENDING có tổ bay hợp lệ, chờ trình\/duyệt.",
+        "data": {
+            "flight": "AS9911",
+            "flight_id": 534
+        }
+    },
+    "change-aircraft": {
+        "description": "Phương án thay tàu chờ quản lý duyệt độc lập.",
+        "data": {
+            "flight": "AS9903",
+            "flight_id": 531,
+            "change_id": "3afcaf02-7597-45c6-9e2c-566eefaa8d3f"
+        }
+    },
+    "change-crew": {
+        "description": "Phương án thay tổ bay chờ quản lý duyệt độc lập.",
+        "data": {
+            "flight": "AS9902",
+            "flight_id": 530,
+            "change_id": "c26691a6-11c8-49e0-a6f1-8506d1379245"
+        }
+    },
+    "disruption-delay": {
+        "description": "Phương án chậm 45 phút chờ duyệt.",
+        "data": {
+            "flight": "AS9920",
+            "flight_id": 535,
+            "disruption_id": 1
+        }
+    },
+    "disruption-cancel": {
+        "description": "Phương án hủy chuyến chờ duyệt.",
+        "data": {
+            "flight": "AS9921",
+            "flight_id": 536,
+            "disruption_id": 2
+        }
+    },
+    "maintenance-open": {
+        "description": "Lệnh bảo dưỡng OPEN, ba kỹ thuật viên độc lập.",
+        "data": {
+            "aircraft": "VN-D301",
+            "work_order_id": 1
+        }
+    },
+    "maintenance-completed": {
+        "description": "Lệnh bảo dưỡng COMPLETED, ba kỹ thuật viên độc lập.",
+        "data": {
+            "aircraft": "VN-D302",
+            "work_order_id": 2
+        }
+    },
+    "maintenance-released": {
+        "description": "Lệnh bảo dưỡng RELEASED, ba kỹ thuật viên độc lập.",
+        "data": {
+            "aircraft": "VN-D303",
+            "work_order_id": 3
+        }
+    },
+    "master-airports": {
+        "description": "Phiên bản danh mục airports chờ người thứ hai duyệt.",
+        "data": {
+            "change_id": 1,
+            "record_id": "VDO"
+        }
+    },
+    "master-routes": {
+        "description": "Phiên bản danh mục routes chờ người thứ hai duyệt.",
+        "data": {
+            "change_id": 2,
+            "record_id": 39
+        }
+    },
+    "master-airport_resources": {
+        "description": "Phiên bản danh mục airport_resources chờ người thứ hai duyệt.",
+        "data": {
+            "change_id": 3,
+            "record_id": 50
+        }
+    },
+    "master-aircraft": {
+        "description": "Phiên bản danh mục aircraft chờ người thứ hai duyệt.",
+        "data": {
+            "change_id": 4,
+            "record_id": 17
+        }
+    },
+    "master-crew_members": {
+        "description": "Phiên bản danh mục crew_members chờ người thứ hai duyệt.",
+        "data": {
+            "change_id": 5,
+            "record_id": 181
+        }
+    },
+    "ground-tasks": {
+        "description": "Nhiệm vụ mặt đất ở ba trạng thái; có việc quá hạn để kiểm tra cảnh báo.",
+        "data": {
+            "task_ids": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ]
+        }
+    },
+    "support-open": {
+        "description": "Yêu cầu hỗ trợ OPEN có lịch sử hội thoại.",
+        "data": {
+            "case_id": 1,
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "support-in_progress": {
+        "description": "Yêu cầu hỗ trợ IN_PROGRESS có lịch sử hội thoại.",
+        "data": {
+            "case_id": 2,
+            "email": "demo.passenger.2@airline.test"
+        }
+    },
+    "support-resolved": {
+        "description": "Yêu cầu hỗ trợ RESOLVED có lịch sử hội thoại.",
+        "data": {
+            "case_id": 3,
+            "email": "demo.passenger.3@airline.test"
+        }
+    },
+    "iot": {
+        "description": "Thiết bị mô phỏng có dữ liệu bình thường, vượt ngưỡng và đến trễ.",
+        "data": {
+            "device_ids": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ]
+        }
+    },
+    "reconciliation-closed": {
+        "description": "Kỳ lịch sử khớp số liệu và đã khóa bởi người thứ hai.",
+        "data": {
+            "run_id": 1,
+            "period": "2026-10-26"
+        }
+    },
+    "reconciliation-open": {
+        "description": "Kỳ hiện tại có giao dịch đang xử lý để thử phân loại sai lệch và khóa kỳ.",
+        "data": {
+            "run_id": 2
+        }
+    },
+    "flight-milestones": {
+        "description": "Các chuyến đã đóng cửa, đang bay và đã đến để thử hoàn tất khai thác.",
+        "data": {
+            "GATE_CLOSED": "AS9930",
+            "DEPARTED": "AS9931",
+            "ARRIVED": "AS9932"
+        }
+    },
+    "flight-cancelled": {
+        "description": "Chuyến đã hủy, vé được chuyển sang quy trình hoàn tiền tự động.",
+        "data": {
+            "flight": "AS9940",
+            "reference": "HWRVYUOB",
+            "booking_id": "e08d7eb4-d7d6-461e-a30c-4ea2a0f79ba1",
+            "email": "demo.passenger.3@airline.test"
+        }
+    },
+    "flight-delayed": {
+        "description": "Chuyến đã chậm 60 phút, cần phân bổ cửa theo giờ mới.",
+        "data": {
+            "flight": "AS9941",
+            "flight_id": 541
+        }
+    },
+    "booking-held": {
+        "description": "Đặt chỗ thử nghiệm: held.",
+        "data": {
+            "reference": "G5NHRF4T",
+            "booking_id": "14536963-fb41-4f31-aeb4-d79283f13099",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "booking-expired": {
+        "description": "Đặt chỗ thử nghiệm: expired.",
+        "data": {
+            "reference": "IBCQQO1O",
+            "booking_id": "fb3ac46a-54d1-4c08-bd13-c208470e47f8",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "booking-cancelled": {
+        "description": "Đặt chỗ thử nghiệm: cancelled.",
+        "data": {
+            "reference": "QLBX8Y7C",
+            "booking_id": "613ebce5-1e25-48ba-a471-85552db95d29",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "booking-declined": {
+        "description": "Đặt chỗ thử nghiệm: declined.",
+        "data": {
+            "reference": "6AVIN1MS",
+            "booking_id": "6fad63d2-4ea4-4f11-b981-e78cb4c1cbb8",
+            "email": "demo.passenger@airline.test"
+        }
+    },
+    "booking-momo-ready": {
+        "description": "Đặt chỗ thử nghiệm: momo-ready.",
+        "data": {
+            "reference": "Z5VBY40I",
+            "booking_id": "98ee66cb-0def-44ec-960e-0949d73b56a9",
+            "email": "demo.passenger@airline.test"
+        }
+    }
+}

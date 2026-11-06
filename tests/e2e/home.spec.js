@@ -1,0 +1,55 @@
+const {test,expect}=require('@playwright/test');
+const {login,provision}=require('./helpers');
+
+test('customer home welcomes the user and opens the existing flight search',async({page})=>{
+ const email='home-browser@example.test';provision([[email,'passenger']]);
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.setViewportSize({width:1440,height:1050});
+ await page.goto('/journeys');await expect(page).toHaveURL(/\/login$/);
+ await login(page,email);await expect(page).toHaveURL(/\/home$/);
+ await expect(page.getByText('Chào Browser passenger,',{exact:true})).toBeVisible();
+ await expect(page.locator('.home-hero-image')).toBeVisible();
+ await expect.poll(()=>page.locator('.home-hero-image').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
+ await expect(page.locator('#home-origin')).toHaveValue('');
+ await expect(page.locator('#home-destination')).toBeDisabled();
+ await page.locator('#home-origin').selectOption('HAN');
+ await expect(page.locator('#home-destination')).toBeEnabled();
+ await expect(page.locator('#home-destination option[value="HAN"]')).toHaveCount(0);
+ await page.locator('#home-destination').selectOption('SGN');
+ await page.locator('#home-trip-type').selectOption('ROUND_TRIP');
+ await expect(page.locator('#home-return')).toBeVisible();
+ const departure=await page.locator('#home-departure').inputValue();
+ expect(departure).not.toBe('');
+ await page.locator('#home-departure').fill('2030-02-15');
+ expect(await page.locator('#home-return').inputValue()).toBe('2030-02-18');
+ await page.locator('#home-trip-type').selectOption('ONE_WAY');
+ await expect(page.locator('#home-return')).toBeHidden();
+ await expect(page.locator('#home-return')).toBeDisabled();
+ await expect(page.locator('#home-passengers')).toHaveCount(0);
+ await page.locator('#home-departure').fill('');
+ await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
+ await page.getByRole('button',{name:'Tìm chuyến bay',exact:true}).click();
+ const search=new URL(page.url());
+ expect(search.pathname).toBe('/');expect(search.searchParams.get('origin')).toBe('HAN');
+ expect(search.searchParams.get('destination')).toBe('SGN');
+ expect(search.searchParams.get('passenger_count')).toBe('1');
+ expect(search.searchParams.get('trip_type')).toBe('ONE_WAY');
+ expect(search.searchParams.has('return_date')).toBe(false);
+ await page.goto('/home');
+ await page.locator('.home-shortcuts').getByRole('link',{name:/Hành trình của tôi/}).click();
+ await expect(page).toHaveURL(/\/journeys$/);
+ expect(errors).toEqual([]);
+});
+
+test('home fits a phone and basic information works without login',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/home');
+ await expect(page.locator('.home-hero-image')).toBeVisible();
+ await page.getByText('Tôi có thể đặt chuyến khứ hồi không?',{exact:true}).click();
+ await expect(page.getByText('Có. Chọn Khứ hồi và ngày đi/ngày về.',{exact:false})).toBeVisible();
+ await page.locator('#home-trip-type').selectOption('ROUND_TRIP');
+ await expect(page.locator('#home-return')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await page.screenshot({path:'test-results/home-mobile.png',fullPage:true});
+ await page.locator('.home-shortcuts').getByRole('link',{name:/Hỗ trợ hành khách/}).click();
+ await expect(page).toHaveURL(/\/login$/);
+});

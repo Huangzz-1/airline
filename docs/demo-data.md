@@ -1,5 +1,9 @@
 # Bộ dữ liệu thử nghiệm sân bay
 
+**Bổ sung nhiều hãng:** [1.008 chuyến trong 14 ngày](multi-airline-demo.md), Vietnam Airlines/Vietjet/Bamboo/Vietravel, có bay thẳng, 1–2 điểm dừng và khứ hồi. Lệnh `php artisan airline:demo-flights` chỉ bổ sung lịch/tồn/hạng giá, không tạo giao dịch và không yêu cầu đổi cấu hình thanh toán.
+
+Để thử các chức năng mới **nhiều hành khách, khứ hồi/nhiều chặng và cabin theo tàu**, chạy thêm `php artisan airline:demo-reservations` trong `backend`. Lệnh tạo ba tàu có sơ đồ riêng, sáu chuyến AS9700–AS9705 và hai PNR đã thanh toán. Mở `/plan` để đặt mới; xem [hướng dẫn đầy đủ](reservations-and-cabins.md). Mã PNR và liên kết mẫu nằm trong `backend/storage/app/private/demo/reservations.json`.
+
 Bộ dữ liệu này dành cho thử các chức năng hiện có của Airline Smart trên máy local. Tên sân bay là danh mục tham khảo; hành khách, nhân viên, chuyến bay, mã tàu, thời gian bay, khoảng cách, giá vé và giao dịch đều được mô phỏng. Sơ đồ ghế tuân theo mô hình sáu ghế mỗi hàng hiện có của ứng dụng.
 
 ## Tạo dữ liệu

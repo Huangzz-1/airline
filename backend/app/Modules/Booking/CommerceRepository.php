@@ -24,8 +24,15 @@ class CommerceRepository
         return DB::table('bookings')->where('id', $id)->lockForUpdate()->first() ?? abort(404);
     }
 
-    public function list(int $user)
+    public function list(int $user, ?string $status = null, ?string $query = null)
     {
-        return DB::table('bookings')->where('user_id', $user)->latest()->paginate(10);
+        return DB::table('bookings')
+            ->where('user_id', $user)
+            ->whereNull('reservation_id')
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($query, fn ($q) => $q->where('reference', 'like', '%'.addcslashes($query, '\\%_').'%'))
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
     }
 }

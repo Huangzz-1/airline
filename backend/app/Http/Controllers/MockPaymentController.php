@@ -44,6 +44,6 @@ class MockPaymentController extends Controller
         }
         $relay->drain();
 
-        return redirect('/journeys/'.$i->booking_id)->with('message', $success ? 'Thanh toán thử nghiệm thành công.' : 'Thanh toán thử nghiệm bị từ chối.');
+        return redirect($i->reservation_id ? '/reservations/'.$i->reservation_id : '/journeys/'.$i->booking_id)->with('message', $success ? 'Thanh toán thử nghiệm thành công.' : 'Thanh toán thử nghiệm bị từ chối.');
     }
 }

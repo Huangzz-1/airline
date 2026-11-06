@@ -32,9 +32,9 @@ class GatewayPayments
         // even when the create response is lost. Never roll this row back on timeout.
         $intent = $this->db()->transaction(function () use ($event, $p) {
             $db = $this->db();
-            $db->table('checkout_intents')->insertOrIgnore(['id' => $p['intent_id'], 'booking_id' => $p['booking_id'], 'reference' => $p['reference'], 'method' => $p['method'], 'mode' => $p['mode'] ?? 'gateway', 'amount' => $p['amount'], 'ip_address' => $p['ip_address'], 'expires_at' => $p['expires_at'], 'created_at' => now(), 'updated_at' => now()]);
+            $db->table('checkout_intents')->insertOrIgnore(['id' => $p['intent_id'], 'booking_id' => $p['booking_id'], 'reference' => $p['reference'], 'method' => $p['method'], 'mode' => $p['mode'] ?? 'gateway', 'amount' => $p['amount'], 'ip_address' => $p['ip_address'], 'expires_at' => $p['expires_at'], 'reservation_id' => $p['reservation_id'] ?? null, 'items' => isset($p['items']) ? json_encode($p['items'], JSON_THROW_ON_ERROR) : null, 'created_at' => now(), 'updated_at' => now()]);
             $i = $db->table('checkout_intents')->where('id', $p['intent_id'])->lockForUpdate()->first() ?? throw new \RuntimeException('Checkout identity conflict');
-            if ($i->booking_id !== $p['booking_id'] || $i->amount !== (int) $p['amount'] || $i->method !== $p['method']) {
+            if ($i->booking_id !== $p['booking_id'] || $i->amount !== (int) $p['amount'] || $i->method !== $p['method'] || $i->reservation_id !== ($p['reservation_id'] ?? null) || ($i->items ? json_decode($i->items, true) : null) !== ($p['items'] ?? null)) {
                 throw new \RuntimeException('Checkout replay mismatch');
             }
 
@@ -163,11 +163,16 @@ class GatewayPayments
             }
             abort_if($db->table('checkout_intents')->where('method', $i->method)->where('provider_transaction', $transaction)->where('id', '!=', $i->id)->exists(), 409, 'Mã giao dịch đã được sử dụng.');
             $db->table('checkout_intents')->where('id', $id)->update(['status' => $status, 'provider_transaction' => $transaction, 'approved_by' => $actor, 'updated_at' => now()]);
-            $db->table('payments')->insert(['booking_id' => $i->booking_id, 'amount' => $i->amount, 'currency' => 'VND', 'status' => $status, 'method' => $i->method, 'mode' => $i->mode, 'correlation_id' => $id, 'created_at' => now(), 'updated_at' => now()]);
-            if ($status === 'CAPTURED') {
-                $db->table('ledger_entries')->insert(['booking_id' => $i->booking_id, 'kind' => 'CAPTURE', 'amount' => $i->amount, 'created_at' => now()]);
+            $items = $i->items ? json_decode($i->items, true, 32, JSON_THROW_ON_ERROR) : [['booking_id' => $i->booking_id, 'amount' => $i->amount]];
+            abort_unless(count($items) >= 1 && count($items) <= 54 && array_sum(array_column($items, 'amount')) === (int) $i->amount && count(array_unique(array_column($items, 'booking_id'))) === count($items) && in_array($i->booking_id, array_column($items, 'booking_id'), true), 409, 'Phân bổ thanh toán không khớp tổng tiền.');
+            foreach ($items as $item) {
+                abort_unless(is_int($item['amount']) && $item['amount'] > 0, 409, 'Số tiền vé không hợp lệ.');
+                $db->table('payments')->insert(['booking_id' => $item['booking_id'], 'amount' => $item['amount'], 'currency' => 'VND', 'status' => $status, 'method' => $i->method, 'mode' => $i->mode, 'correlation_id' => $id, 'created_at' => now(), 'updated_at' => now()]);
+                if ($status === 'CAPTURED') {
+                    $db->table('ledger_entries')->insert(['booking_id' => $item['booking_id'], 'kind' => 'CAPTURE', 'amount' => $item['amount'], 'created_at' => now()]);
+                }
+                Events::emit('finance', 'PaymentResult', ['booking_id' => $item['booking_id'], 'amount' => $item['amount'], 'status' => $status, 'correlation_id' => $id]);
             }
-            Events::emit('finance', 'PaymentResult', ['booking_id' => $i->booking_id, 'amount' => $i->amount, 'status' => $status, 'correlation_id' => $id]);
             Audit::record('checkout.'.$status, $i->booking_id, null, $i->method, $actor, 'finance', $id);
         }, 3);
     }

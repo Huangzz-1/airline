@@ -26,18 +26,23 @@ class TravelDocumentController extends Controller
         $ticket = DB::table('tickets')->where('booking_id', $id)->first() ?? abort(404);
         $pass = null;
         $qr = null;
-        if ($kind === 'boarding-pass') {
+        if ($kind === 'boarding-pass' || in_array($b->status, ['CHECKED_IN', 'BOARDED'], true)) {
             abort_unless(in_array($b->status, ['CHECKED_IN', 'BOARDED']), 409, 'Vui lòng làm thủ tục trước khi in thẻ lên tàu.');
             $stock = DB::table('inventory')->where('flight_id', $f->id)->first();
-            abort_if($stock?->frozen_change_id, 409, 'Chuyến đang cập nhật tàu bay. Vui lòng lấy thẻ mới sau khi hoàn tất.');
+            abort_if($kind === 'boarding-pass' && $stock?->frozen_change_id, 409, 'Chuyến đang cập nhật tàu bay. Vui lòng lấy thẻ mới sau khi hoàn tất.');
             $pass = app(BoardingService::class)->pass($id, $b->user_id);
-            abort_if($pass->revoked_at || now()->gte($pass->expires_at), 409, 'Thẻ lên tàu đã hết hạn hoặc bị thu hồi.');
-            $qr = (new Writer(new ImageRenderer(new RendererStyle(220), new SvgImageBackEnd)))->writeString($pass->token);
+            if ($kind === 'boarding-pass') {
+                abort_if($pass->revoked_at || now()->gte($pass->expires_at), 409, 'Thẻ lên tàu đã hết hạn hoặc bị thu hồi.');
+            }
+            if (! $stock?->frozen_change_id && ! $pass->revoked_at && now()->lt($pass->expires_at)) {
+                $qr = (new Writer(new ImageRenderer(new RendererStyle(220), new SvgImageBackEnd)))->writeString($pass->token);
+            }
         }
-        $passenger = DB::table('users')->find($b->user_id);
+        $passenger = $b->passenger_id ? DB::table('reservation_passengers')->find($b->passenger_id) : DB::table('users')->find($b->user_id);
+        $pnr = $b->reservation_id ? DB::table('reservations')->where('id', $b->reservation_id)->value('reference') : $b->reference;
 
         $mode = DB::table('checkout_sessions')->where('booking_id', $b->id)->value('mode') ?? 'simulator';
 
-        return view('travel-document', compact('b', 'f', 'ticket', 'pass', 'qr', 'passenger', 'kind', 'mode'));
+        return view('travel-document', compact('b', 'f', 'ticket', 'pass', 'qr', 'passenger', 'pnr', 'kind', 'mode'));
     }
 }

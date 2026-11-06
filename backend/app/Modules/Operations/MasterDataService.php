@@ -3,6 +3,7 @@
 namespace App\Modules\Operations;
 
 use App\Models\User;
+use App\Modules\Boarding\SeatMap;
 use App\Modules\Shared\Access;
 use App\Modules\Shared\Audit;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ class MasterDataService
         'airports' => ['data_admin', ['name' => 'required|string|max:120', 'city' => 'required|string|max:100', 'timezone' => 'required|timezone']],
         'routes' => ['data_admin', ['active' => 'required|boolean', 'duration_minutes' => 'required|integer|between:15,1440', 'distance_km' => 'required|integer|between:1,30000']],
         'airport_resources' => ['data_admin', ['active' => 'required|boolean']],
-        'aircraft' => ['fleet_manager', ['type' => 'required|string|max:80', 'capacity' => 'required|integer|between:1,600']],
+        'aircraft' => ['fleet_manager', ['type' => 'required|string|max:80', 'capacity' => 'required|integer|between:1,600', 'layout_preset' => 'nullable|in:LEGACY,AUTO,NARROW,WIDE,REGIONAL', 'seat_layout' => 'nullable|array']],
         'crew_members' => ['crew_scheduler', ['qualification' => 'required|string|max:80', 'license_expires' => 'required|date|after:today', 'available' => 'required|boolean']],
     ];
 
@@ -35,6 +36,22 @@ class MasterDataService
 
         return $db->transaction(function () use ($u, $db, $base, $changes) {
             $current = $this->record($db, $base['entity'], $base['record_id'], true);
+            if ($base['entity'] === 'aircraft') {
+                if (isset($changes['layout_preset'])) {
+                    $layout = SeatMap::preset($changes['layout_preset'], $changes['type'], $changes['capacity']);
+                    unset($changes['layout_preset']);
+                } elseif (array_key_exists('seat_layout', $changes)) {
+                    $layout = $changes['seat_layout'];
+                } else {
+                    $layout = isset($current->seat_layout) ? json_decode($current->seat_layout, true) : null;
+                }
+                try {
+                    abort_unless(count(SeatMap::seats($changes['capacity'], $layout)) === (int) $changes['capacity'], 422, 'Số ghế trong sơ đồ không khớp sức chứa.');
+                } catch (\InvalidArgumentException $e) {
+                    abort(422, 'Sơ đồ cabin không hợp lệ.');
+                }
+                $changes['seat_layout'] = $layout ? json_encode($layout, JSON_THROW_ON_ERROR) : null;
+            }
             $id = $db->table('master_changes')->insertGetId(['entity' => $base['entity'], 'record_id' => $base['record_id'], 'before_data' => json_encode($current), 'after_data' => json_encode($changes), 'reason' => $base['reason'], 'created_by' => $u->id, 'created_at' => now(), 'updated_at' => now()]);
             Audit::record('master.proposed', (string) $id, null, 'PENDING', $u->id, 'ops');
 
@@ -57,6 +74,9 @@ class MasterDataService
             abort_unless($change->status === 'PENDING' && $change->created_by !== $u->id, 409, 'Cần người duyệt độc lập.');
             $actual = (array) $current;
             $before = (array) json_decode($change->before_data);
+            if ($base->entity === 'aircraft' && ! array_key_exists('seat_layout', $before) && ($actual['seat_layout'] ?? null) === null) {
+                $before['seat_layout'] = null;
+            }
             ksort($actual);
             ksort($before);
             abort_unless($actual === $before, 409, 'Dữ liệu nguồn đã đổi; cần lập phiên bản mới.');

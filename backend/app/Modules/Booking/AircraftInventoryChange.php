@@ -41,12 +41,20 @@ class AircraftInventoryChange
             if ($stock->source_version >= $p['fence_version']) {
                 $reason = 'Phiên bản tồn chỗ đã thay đổi; không áp dụng dữ liệu cũ.';
             } elseif ($bookings->contains('status', 'BOARDED')) {
-                $reason = 'Đã có khách boarding; cần quy trình offload riêng trước khi đổi tàu.';
+                $reason = 'Đã có hành khách lên tàu; cần quy trình xử lý riêng trước khi đổi tàu.';
             } elseif ($bookings->count() > $capacity) {
                 $reason = 'Tàu mới không đủ chỗ cho các booking còn hiệu lực ('.$bookings->count().'/'.$capacity.').';
             }
+            if (! $reason && ! empty($p['seat_layout'])) {
+                foreach ($bookings->groupBy(fn ($b) => SeatMap::cabin($b->fare_class)) as $cabin => $members) {
+                    if ($members->count() > count(SeatMap::seats($capacity, $p['seat_layout'], $cabin))) {
+                        $reason = 'Khoang '.$cabin.' của tàu mới không đủ chỗ cho các vé còn hiệu lực.';
+                        break;
+                    }
+                }
+            }
             $status = $reason ? 'REJECTED' : 'PREPARED';
-            DB::table('aircraft_change_receipts')->insert(['change_id' => $p['change_id'], 'flight_id' => $p['flight_id'], 'target_aircraft_id' => $p['target_aircraft_id'], 'fence_version' => $p['fence_version'], 'old_capacity' => $stock->capacity, 'old_status' => $stock->status, 'new_capacity' => $capacity, 'requested_capacity' => $p['capacity'], 'departure' => Carbon::parse($p['departure'])->utc(), 'flight_number' => $p['number'], 'status' => $status, 'reason' => $reason, 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('aircraft_change_receipts')->insert(['change_id' => $p['change_id'], 'flight_id' => $p['flight_id'], 'target_aircraft_id' => $p['target_aircraft_id'], 'fence_version' => $p['fence_version'], 'old_capacity' => $stock->capacity, 'old_status' => $stock->status, 'new_capacity' => $capacity, 'requested_capacity' => $p['capacity'], 'seat_layout' => $p['seat_layout'] ?? null, 'departure' => Carbon::parse($p['departure'])->utc(), 'flight_number' => $p['number'], 'status' => $status, 'reason' => $reason, 'created_at' => now(), 'updated_at' => now()]);
             if (! $reason) {
                 DB::table('inventory')->where('flight_id', $p['flight_id'])->update(['frozen_change_id' => $p['change_id'], 'status' => 'RECONFIGURING', 'source_version' => $p['fence_version']]);
             }
@@ -58,7 +66,7 @@ class AircraftInventoryChange
 
     private function same(object $receipt, array $p): void
     {
-        if ($receipt->flight_id !== (int) $p['flight_id'] || $receipt->target_aircraft_id !== (int) $p['target_aircraft_id'] || $receipt->fence_version !== (int) $p['fence_version'] || $receipt->requested_capacity !== (int) $p['capacity'] || ! Carbon::parse($receipt->departure)->eq(Carbon::parse($p['departure'])) || $receipt->flight_number !== $p['number']) {
+        if ($receipt->flight_id !== (int) $p['flight_id'] || $receipt->target_aircraft_id !== (int) $p['target_aircraft_id'] || $receipt->fence_version !== (int) $p['fence_version'] || $receipt->requested_capacity !== (int) $p['capacity'] || json_decode($receipt->seat_layout ?? 'null', true) !== json_decode($p['seat_layout'] ?? 'null', true) || ! Carbon::parse($receipt->departure)->eq(Carbon::parse($p['departure'])) || $receipt->flight_number !== $p['number']) {
             throw new \RuntimeException('Change replay payload mismatch');
         }
     }
@@ -87,16 +95,15 @@ class AircraftInventoryChange
             $checked = $bookings->where('status', 'CHECKED_IN');
             $occupied = [];
             foreach ($checked as $b) {
-                if ($b->seat && SeatMap::contains($b->seat, $receipt->new_capacity)) {
+                if ($b->seat && SeatMap::contains($b->seat, $receipt->new_capacity, $receipt->seat_layout, $b->fare_class)) {
                     $occupied[$b->seat] = true;
                 }
             }
             foreach ($checked as $b) {
                 $seat = $b->seat;
-                if (! $seat || ! SeatMap::contains($seat, $receipt->new_capacity)) {
+                if (! $seat || ! SeatMap::contains($seat, $receipt->new_capacity, $receipt->seat_layout, $b->fare_class)) {
                     $seat = null;
-                    for ($i = 0; $i < $receipt->new_capacity; $i++) {
-                        $candidate = (intdiv($i, 6) + 1).chr(65 + $i % 6);
+                    foreach (SeatMap::seats($receipt->new_capacity, $receipt->seat_layout, $b->fare_class) as $candidate) {
                         if (! isset($occupied[$candidate])) {
                             $seat = $candidate;
                             break;
@@ -118,7 +125,7 @@ class AircraftInventoryChange
                 Events::notify($b->user_id, 'Đổi tàu chuyến '.$receipt->flight_number, 'Ghế '.$b->seat.' → '.$seat.'. QR cũ hết hiệu lực; thẻ mới đã cấp trong hành trình.');
                 Audit::record('aircraft_change.seat', $b->id, $b->seat, $seat);
             }
-            DB::table('inventory')->where('flight_id', $p['flight_id'])->update(['capacity' => $receipt->new_capacity]);
+            DB::table('inventory')->where('flight_id', $p['flight_id'])->update(['capacity' => $receipt->new_capacity, 'seat_layout' => $receipt->seat_layout]);
             DB::table('fare_classes')->where('flight_id', $p['flight_id'])->where('quota', '>', $receipt->new_capacity)->update(['quota' => $receipt->new_capacity]);
             DB::table('aircraft_change_receipts')->where('change_id', $p['change_id'])->update(['status' => 'COMMITTED', 'updated_at' => now()]);
             DB::table('inbox')->insert(['id' => $id, 'received_at' => now()]);

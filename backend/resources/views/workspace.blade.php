@@ -1,12 +1,13 @@
 @extends('layouts.app')
 @section('content')
 <div class="eyebrow">Không gian nghiệp vụ · {{ auth()->user()->airport_code??'Toàn hệ thống' }}</div><h1>{{ $title }}</h1>
+@if($section==='fleet')<p><a class="btn btn-outline-primary" href="/workspace/fleet-cabin">Xem và cấu hình sơ đồ cabin</a></p>@endif
 @if($section==='finance') @include('partials.bank-transfers') @include('partials.refund-payouts') @endif
 @if(auth()->user()->role==='passenger')<nav class="module-nav" aria-label="Phân hệ">@foreach($sections as $key=>[$label,$roles])@if(in_array(auth()->user()->role,$roles))<a class="{{ $section===$key?'active':'' }}" href="/workspace/{{ $key }}">{{ $label }}</a>@endif @endforeach</nav>@endif
 @if(!empty($kpis))<div class="kpi-grid">@foreach($kpis as $label=>$value)<section class="card-surface"><div class="subtle">{{ $label }}</div><div class="kpi-value">{{ $value }}</div></section>@endforeach</div>@endif
 @if(session('result')) @include('partials.forecast-result',['result'=>session('result')]) @endif
-@if($section==='recovery')<div class="alert alert-info">Đổi tàu chỉ hỗ trợ cùng loại/năng định, trước boarding. Trong khi đồng bộ, hệ thống tạm khóa các thao tác ghế/vé. Nếu tàu mới thiếu chỗ hoặc đã có khách boarding, giữ tàu và ghế cũ. Thay tổ bay được kiểm tra và phê duyệt độc lập; giờ và ghế không đổi.</div>@endif
-@if($section==='disruptions')<p class="alert alert-info">Duyệt hủy chuyến sẽ thông báo hành khách, thu hồi QR và yêu cầu hoàn toàn bộ giá vé . Duyệt trễ phải kiểm tra tàu bay, tổ bay và tài nguyên. Người lập không được tự duyệt.</p>@endif
+@if($section==='recovery')<div class="alert alert-info">Đổi tàu chỉ hỗ trợ cùng loại và năng định trước khi lên tàu. Trong khi đồng bộ, hệ thống tạm khóa các thao tác ghế và vé. Nếu tàu mới thiếu chỗ hoặc đã có hành khách lên tàu, giữ tàu và ghế cũ. Thay tổ bay được kiểm tra và phê duyệt độc lập; giờ và ghế không đổi.</div>@endif
+@if($section==='disruptions')<p class="alert alert-info">Duyệt hủy chuyến sẽ thông báo cho hành khách, thu hồi QR và yêu cầu hoàn toàn bộ giá vé. Duyệt muộn cần kiểm tra tàu bay, tổ bay và tài nguyên. Người lập không được tự duyệt.</p>@endif
 @if($section==='maintenance')<p class="subtle">Mở lệnh sẽ khóa khả dụng tàu bay. Chỉ kỹ thuật viên độc lập mới được giải phóng sau khi có bằng chứng hoàn tất.</p>@endif
 @if($section==='crew')<p class="subtle">Phân công cần đúng năng định tàu bay, giấy phép còn hạn và đủ thời gian nghỉ giữa các nhiệm vụ.</p>@endif
 <form method="get" class="d-flex gap-2 mb-4"><label class="visually-hidden" for="q">Tìm kiếm</label><input class="form-control" id="q" name="q" value="{{ request('q') }}" placeholder="Tìm theo tên, số hiệu hoặc nội dung"><button class="btn btn-outline-primary">Lọc</button><a class="btn btn-outline-secondary" href="/workspace/{{ $section }}">Xóa lọc</a></form>

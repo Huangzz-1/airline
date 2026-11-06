@@ -3,6 +3,9 @@
 namespace App\Modules\Operations;
 
 use App\Models\User;
+use App\Modules\Boarding\BoardingOperations;
+use App\Modules\Boarding\SeatMap;
+use App\Modules\Flights\Carrier;
 use App\Modules\Shared\Access;
 use App\Modules\Shared\Audit;
 use App\Modules\Shared\Events;
@@ -25,10 +28,10 @@ class OperationsService
     public function execute(User $u, string $action, array $input): object
     {
         [$roles,$rules] = match ($action) {
-            'airport' => [['data_admin'], ['code' => 'required|regex:/^[A-Z]{3}$/', 'name' => 'required|string|max:120', 'city' => 'required|string|max:100', 'timezone' => 'required|timezone']],
+            'airport' => [['data_admin'], ['code' => 'required|regex:/^[A-Z]{3}$/', 'name' => 'required|string|max:120', 'city' => 'required|string|max:100', 'timezone' => 'required|timezone', 'icao' => 'nullable|regex:/^[A-Z0-9]{4}$/', 'country_code' => 'nullable|regex:/^[A-Z]{2}$/', 'latitude' => 'nullable|numeric|between:-90,90', 'longitude' => 'nullable|numeric|between:-180,180', 'operating_hours' => 'nullable|array', 'active' => 'sometimes|boolean']],
             'route' => [['data_admin'], ['origin' => 'required|string|size:3', 'destination' => 'required|string|size:3|different:origin', 'duration_minutes' => 'required|integer|between:15,1440', 'distance_km' => 'required|integer|between:1,30000']],
             'resource' => [['data_admin'], ['airport_code' => 'required|string|size:3', 'code' => 'required|string|max:30', 'type' => 'required|in:TERMINAL,GATE,STAND,COUNTER']],
-            'aircraft' => [['fleet_manager'], ['registration' => 'required|regex:/^[A-Z0-9-]{3,20}$/', 'type' => 'required|string|max:80', 'capacity' => 'required|integer|between:1,600']],
+            'aircraft' => [['fleet_manager'], ['registration' => 'required|regex:/^[A-Z0-9-]{3,20}$/', 'type' => 'required|string|max:80', 'capacity' => 'required|integer|between:1,600', 'layout_preset' => 'nullable|in:LEGACY,AUTO,NARROW,WIDE,REGIONAL']],
             'crew' => [['crew_scheduler'], ['code' => 'required|string|max:30', 'name' => 'required|string|max:100', 'position' => 'required|in:PILOT,CABIN', 'qualification' => 'required|string|max:80', 'license_expires' => 'required|date|after:today']],
             'season' => [['operations'], ['number' => 'required|regex:/^[A-Z]{2}[0-9]{2,5}$/', 'route_id' => 'required|integer', 'aircraft_id' => 'required|integer', 'from_date' => 'required|date_format:Y-m-d|after:today', 'to_date' => 'required|date_format:Y-m-d|after_or_equal:from_date', 'weekdays' => 'required|regex:/^[1-7](,[1-7])*$/', 'local_departure' => 'required|date_format:H:i', 'duration_minutes' => 'required|integer|between:15,720', 'sale_price' => 'required|integer|between:1000,100000000', 'gate' => 'required|string|max:20']],
             'submit_batch' => [['operations'], ['flight_ids' => 'required|regex:/^[0-9]+(,[0-9]+){0,30}$/']],
@@ -76,6 +79,10 @@ class OperationsService
     private function airport(User $u, array $d): object
     {
         abort_if($this->db()->table('airports')->where('code', $d['code'])->exists(), 409, 'Mã sân bay đã tồn tại.');
+        if (isset($d['operating_hours'])) {
+            $d['operating_hours'] = json_encode($d['operating_hours'], JSON_THROW_ON_ERROR);
+        }
+        $d['active'] = $d['active'] ?? true;
         $this->db()->table('airports')->insert($d);
         $this->audit($u, 'airport.created', $d['code'], null, 'ACTIVE');
 
@@ -106,6 +113,9 @@ class OperationsService
 
     private function aircraft(User $u, array $d): object
     {
+        $layout = SeatMap::preset($d['layout_preset'] ?? 'LEGACY', $d['type'], $d['capacity']);
+        unset($d['layout_preset']);
+        $d['seat_layout'] = $layout ? json_encode($layout, JSON_THROW_ON_ERROR) : null;
         abort_if($this->db()->table('aircraft')->where('registration', $d['registration'])->exists(), 409, 'Số đăng ký đã tồn tại.');
         $id = $this->db()->table('aircraft')->insertGetId($d + ['status' => 'AVAILABLE']);
         $this->audit($u, 'aircraft.created', $id, null, 'AVAILABLE');
@@ -134,6 +144,8 @@ class OperationsService
         $d['arrival'] = Carbon::parse($d['arrival'])->utc();
         abort_if($d['departure']->diffInMinutes($d['arrival']) < $route->duration_minutes, 422, 'Thời lượng ngắn hơn thời gian chuẩn của đường bay.');
         abort_if($this->db()->table('flights')->where('number', $d['number'])->where('departure', $d['departure'])->exists(), 409, 'Chuyến đã tồn tại.');
+        $prefix = substr($d['number'], 0, 2);
+        $d['carrier_code'] = array_key_exists($prefix, Carrier::NAMES) ? $prefix : 'AS';
         $id = $this->db()->table('flights')->insertGetId($d + ['origin' => $route->origin, 'destination' => $route->destination, 'status' => 'DRAFT', 'created_by' => $u->id]);
         $this->audit($u, 'schedule.created', $id, null, 'DRAFT');
 
@@ -262,7 +274,7 @@ class OperationsService
     {
         $f = $this->flight($id);
         $plane = $this->db()->table('aircraft')->find($f->aircraft_id);
-        Events::emit('ops', 'FlightChanged', ['flight_id' => $id, 'status' => $f->status, 'version' => $f->version, 'capacity' => $capacity ?? $plane->capacity, 'price' => $f->sale_price, 'number' => $f->number, 'origin' => $f->origin, 'departure' => $f->departure]);
+        Events::emit('ops', 'FlightChanged', ['flight_id' => $id, 'status' => $f->status, 'version' => $f->version, 'capacity' => $capacity ?? $plane->capacity, 'seat_layout' => $plane->seat_layout ?? null, 'price' => $f->sale_price, 'number' => $f->number, 'origin' => $f->origin, 'departure' => $f->departure]);
     }
 
     private function flight_state(User $u, array $d): object
@@ -273,7 +285,7 @@ class OperationsService
         $allowed = ['SCHEDULED' => ['BOARDING'], 'DELAYED' => ['BOARDING'], 'BOARDING' => ['GATE_CLOSED'], 'GATE_CLOSED' => ['DEPARTED'], 'DEPARTED' => ['ARRIVED']];
         abort_unless(in_array($d['status'], $allowed[$f->status] ?? []), 409, 'Chuyển trạng thái chuyến không hợp lệ.');
         if ($d['status'] === 'BOARDING' && $f->created_by !== null) {
-            abort_unless($f->gate !== 'TBD' && $this->db()->table('resource_allocations')->where('flight_id', $f->id)->where('starts_at', '<=', $f->departure)->where('ends_at', '>=', $f->departure)->exists(), 409, 'Cần điều phối tài nguyên hợp lệ trước boarding.');
+            abort_unless($f->gate !== 'TBD' && $this->db()->table('resource_allocations')->where('flight_id', $f->id)->where('starts_at', '<=', $f->departure)->where('ends_at', '>=', $f->departure)->exists(), 409, 'Cần điều phối tài nguyên hợp lệ trước khi lên tàu.');
         }
         if (in_array($d['status'], ['BOARDING', 'GATE_CLOSED', 'DEPARTED'])) {
             abort_unless($plane->status === 'AVAILABLE', 409, 'Tàu bay không khả dụng.');
@@ -282,7 +294,11 @@ class OperationsService
             abort_if($this->db()->table('ground_tasks')->where('flight_id', $f->id)->where('mandatory', true)->where('status', '!=', 'COMPLETED')->exists(), 409, 'Còn nhiệm vụ mặt đất bắt buộc chưa hoàn tất.');
         }
         if ($d['status'] === 'DEPARTED') {
-            abort_if(DB::table('bookings')->where('flight_id', $f->id)->where('status', 'CHECKED_IN')->exists(), 409, 'Còn hành khách check-in chưa boarding; cần xử lý no-show/offload.');
+            abort_if(DB::table('bookings')->where('flight_id', $f->id)->where('status', 'CHECKED_IN')->exists(), 409, 'Còn hành khách đã check-in nhưng chưa lên tàu; cần xử lý trường hợp không đến.');
+            $manifest = DB::table('boarding_manifests')->where('flight_id', $f->id)->orderByDesc('version')->first();
+            if ($manifest) {
+                abort_unless(hash_equals($manifest->fingerprint, hash('sha256', json_encode(app(BoardingOperations::class)->snapshot($f->id), JSON_THROW_ON_ERROR))), 409, 'Danh sách đã thay đổi sau chốt; cần chốt phiên bản mới trước khởi hành.');
+            }
         }
         $update = ['status' => $d['status'], 'version' => $f->version + 1];
         if ($d['status'] === 'DEPARTED') {

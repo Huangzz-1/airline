@@ -4,6 +4,7 @@ namespace App\Modules\Baggage;
 
 use App\Models\User;
 use App\Modules\Booking\CommerceRepository;
+use App\Modules\Booking\FareRules;
 use App\Modules\Flights\FlightCatalog;
 use App\Modules\Shared\Access;
 use App\Modules\Shared\Audit;
@@ -26,12 +27,17 @@ class BaggageService
             $repo = app(CommerceRepository::class);
             $repo->lockInventory($b->flight_id);
             $b = $repo->locked($b->id);
-            abort_unless(in_array($b->status, ['CHECKED_IN', 'BOARDED']), 409, 'Cần hành khách đã check-in.');
+            abort_unless(in_array($b->status, ['CHECKED_IN', 'BOARDED']), 409, 'Cần có hành khách đã check-in.');
             $old = DB::table('baggage')->where('request_id', $d['request_id'])->first();
             if ($old) {
                 abort_unless($old->booking_id === $b->id && (float) $old->weight === (float) $d['weight'], 409, 'Khóa hành lý đã dùng.');
 
                 return $old;
+            }
+            if ($b->fare_rules) {
+                $limit = FareRules::decode($b->fare_rules)['included_baggage_kg'] + $b->baggage_kg;
+                $weight = DB::table('baggage')->where('booking_id', $b->id)->where('status', '!=', 'OFFLOADED')->sum('weight');
+                abort_if((float) $weight + (float) $d['weight'] > $limit, 409, 'Tổng hành lý vượt hạn mức '.$limit.' kg của vé.');
             }
             $id = DB::table('baggage')->insertGetId(['tag' => 'BG'.strtoupper(Str::random(12)), 'booking_id' => $b->id, 'request_id' => $d['request_id'], 'weight' => $d['weight'], 'custody' => $f->origin.'-CHECKIN', 'created_at' => now(), 'updated_at' => now()]);
             DB::table('baggage_events')->insert(['id' => (string) Str::uuid(), 'baggage_id' => $id, 'status' => 'TAGGED', 'location' => $f->origin, 'custody' => $f->origin.'-CHECKIN', 'actor_id' => $u->id, 'created_at' => now()]);
@@ -61,7 +67,7 @@ class BaggageService
             $states = ['TAGGED' => ['ACCEPTED', 'MISHANDLED', 'OFFLOADED'], 'ACCEPTED' => ['SCREENED', 'MISHANDLED', 'OFFLOADED'], 'SCREENED' => ['LOADED', 'MISHANDLED', 'OFFLOADED'], 'LOADED' => ['TRANSFERRED', 'DELIVERED', 'MISHANDLED', 'OFFLOADED'], 'TRANSFERRED' => ['DELIVERED', 'MISHANDLED'], 'MISHANDLED' => ['ACCEPTED', 'DELIVERED', 'OFFLOADED']];
             abort_unless(in_array($d['status'], $states[$baggage->status] ?? []), 409, 'Bỏ qua mốc bắt buộc hoặc trạng thái hành lý không hợp lệ.');
             if ($d['status'] === 'LOADED') {
-                abort_unless(in_array($b->status, ['CHECKED_IN', 'BOARDED']) && in_array($f->status, ['BOARDING', 'GATE_CLOSED']), 409, 'Hành lý/chuyến chưa đủ điều kiện xếp tàu.');
+                abort_unless(in_array($b->status, ['CHECKED_IN', 'BOARDED']) && in_array($f->status, ['BOARDING', 'GATE_CLOSED']), 409, 'Hành lý hoặc chuyến bay chưa đủ điều kiện xếp lên tàu.');
             }
             if (in_array($d['status'], ['TRANSFERRED', 'DELIVERED'])) {
                 abort_unless($f->status === 'ARRIVED', 409, 'Chuyến chưa đến.');

@@ -20,6 +20,7 @@ use App\Modules\Operations\MasterFileService;
 use App\Modules\Operations\OperationsService;
 use App\Modules\Shared\Access;
 use App\Modules\Shared\Audit;
+use App\Modules\Shared\UseCaseService;
 use App\Support\WorkspaceForms;
 use App\Support\WorkspacePresentation;
 use Carbon\Carbon;
@@ -51,7 +52,7 @@ class WorkspaceController extends Controller
             'notifications' => ['Thông báo', Access::ROLES],
             'audit' => ['Nhật ký kiểm toán', ['admin', 'auditor']],
             'integrations' => ['Giám sát kết nối', ['admin', 'integration_admin']],
-        ];
+        ] + BusinessController::AREAS;
     }
 
     private function scopedFlights(User $u)
@@ -66,6 +67,9 @@ class WorkspaceController extends Controller
 
     public function index(Request $r, string $section = 'scheduling')
     {
+        if (isset(BusinessController::AREAS[$section])) {
+            return app(BusinessController::class)->index($r, $section);
+        }
         $meta = self::sections()[$section] ?? abort(404);
         $u = $r->user();
         Access::role($u, ...$meta[1]);
@@ -103,7 +107,7 @@ class WorkspaceController extends Controller
         }
         if ($section === 'fleet') {
             $dataset('Hồ sơ đội bay', $ops->table('aircraft'), ['id' => 'ID', 'registration' => 'Số đăng ký', 'type' => 'Loại', 'capacity' => 'Ghế', 'status' => 'Trạng thái', 'flight_hours' => 'Giờ bay', 'cycles' => 'Chu kỳ']);
-            $form('aircraft', 'Thêm tàu bay', [$f('registration', 'Số đăng ký'), $f('type', 'Loại/năng định (ví dụ A320)'), $f('capacity', 'Số ghế', 'number')]);
+            $form('aircraft', 'Thêm tàu bay', [$f('registration', 'Số đăng ký'), $f('type', 'Loại/năng định (ví dụ A320)'), $f('capacity', 'Số ghế', 'number'), $f('layout_preset', 'Cấu hình cabin (không chọn: giữ kiểu sáu ghế mỗi hàng)', 'select-optional', SeatMap::presets())]);
         }
         if ($section === 'scheduling') {
             $dataset('Lịch và trạng thái khai thác', $this->scopedFlights($u), ['id' => 'ID', 'number' => 'Số hiệu', 'origin' => 'Đi', 'destination' => 'Đến', 'departure' => 'Khởi hành UTC+7', 'arrival' => 'Đến UTC+7', 'aircraft_id' => 'Tàu bay', 'status' => 'Trạng thái', 'gate' => 'Cửa', 'version' => 'Phiên bản']);
@@ -114,7 +118,7 @@ class WorkspaceController extends Controller
                 $form('season', 'Lập lịch lặp theo kỳ (mỗi đợt tối đa 31 ngày)', [$f('number', 'Số hiệu chuyến'), $f('route_id', 'Đường bay', 'select', $routes), $f('aircraft_id', 'Tàu bay', 'select', $planes), $f('from_date', 'Ngày bắt đầu', 'date'), $f('to_date', 'Ngày kết thúc', 'date'), $f('weekdays', 'Ngày trong tuần: 1=Thứ hai…7=Chủ nhật (ví dụ 1,3,5)'), $f('local_departure', 'Giờ địa phương tại sân bay đi', 'time'), $f('duration_minutes', 'Thời lượng phút', 'number'), $f('sale_price', 'Giá VND', 'number'), $f('gate', 'Cửa dự kiến')]);
                 $form('submit_batch', 'Trình duyệt nhiều lịch', [$f('flight_ids', 'Danh sách ID cách nhau dấu phẩy (tối đa 31)')]);
                 $form('submit', 'Trình duyệt lịch', [$f('flight_id', 'Chuyến nháp', 'select', $flights)]);
-                $form('flight_state', 'Cập nhật khai thác', [$f('flight_id', 'Chuyến', 'select', $flights), $f('status', 'Trạng thái mới', 'select', ['BOARDING' => 'Boarding', 'GATE_CLOSED' => 'Đóng cửa', 'DEPARTED' => 'Khởi hành', 'ARRIVED' => 'Đã đến']), $f('reason', 'Lý do')]);
+                $form('flight_state', 'Cập nhật khai thác', [$f('flight_id', 'Chuyến', 'select', $flights), $f('status', 'Trạng thái mới', 'select', ['BOARDING' => 'Đang đón khách', 'GATE_CLOSED' => 'Đã đóng cửa', 'DEPARTED' => 'Đã khởi hành', 'ARRIVED' => 'Đã hạ cánh']), $f('reason', 'Lý do')]);
             } else {
                 $form('publish', 'Phê duyệt và công bố', [$f('flight_id', 'Chuyến chờ duyệt', 'select', $flights)]);
             }
@@ -177,11 +181,11 @@ class WorkspaceController extends Controller
             }
         }
         if ($section === 'baggage') {
-            $form('offload', 'Ghi nhận no-show và dỡ hành lý', [$f('booking_id', 'Booking UUID'), $f('reason', 'Bằng chứng / lý do xác nhận dỡ hành lý', 'textarea')]);
+                $form('offload', 'Ghi nhận hành khách không đến và dỡ hành lý', [$f('booking_id', 'Mã đặt chỗ (UUID)'), $f('reason', 'Bằng chứng / lý do xác nhận dỡ hành lý', 'textarea')]);
             $ids = $ops->table('flights')->where('origin', $u->airport_code)->orWhere('destination', $u->airport_code)->pluck('id');
             $bookings = DB::table('bookings')->whereIn('flight_id', $ids)->pluck('id');
-            $dataset('Hành lý thuộc sân bay', $q = DB::table('baggage')->whereIn('booking_id', $bookings), ['id' => 'ID', 'tag' => 'Bag Tag', 'booking_id' => 'Booking', 'weight' => 'Kg', 'status' => 'Trạng thái', 'custody' => 'Đang giữ']);
-            $form('bag_tag', 'Tạo thẻ hành lý', [$f('booking_id', 'Booking UUID'), $f('weight', 'Trọng lượng kg', 'number'), $f('request_id', 'request_id', 'uuid')]);
+                $dataset('Hành lý thuộc sân bay', $q = DB::table('baggage')->whereIn('booking_id', $bookings), ['id' => 'ID', 'tag' => 'Mã thẻ hành lý', 'booking_id' => 'Mã đặt chỗ', 'weight' => 'Khối lượng (kg)', 'status' => 'Trạng thái', 'custody' => 'Đang giữ']);
+                $form('bag_tag', 'Tạo thẻ hành lý', [$f('booking_id', 'Mã đặt chỗ (UUID)'), $f('weight', 'Khối lượng (kg)', 'number'), $f('request_id', 'request_id', 'uuid')]);
             $form('bag_scan', 'Quét và bàn giao', [$f('event_id', 'event_id', 'uuid'), $f('tag', 'Bag Tag'), $f('flight_id', 'ID chuyến', 'number'), $f('status', 'Mốc', 'select', array_combine(['ACCEPTED', 'SCREENED', 'LOADED', 'TRANSFERRED', 'DELIVERED', 'MISHANDLED', 'OFFLOADED'], ['Tiếp nhận', 'Soi chiếu', 'Xếp tàu', 'Chuyển tiếp', 'Giao trả', 'Bất thường', 'Dỡ khỏi tàu'])), $f('location', 'Điểm quét'), $f('custody', 'Đơn vị nhận bàn giao')]);
         }
         if ($section === 'customer') {
@@ -191,7 +195,7 @@ class WorkspaceController extends Controller
             }
             $dataset('Yêu cầu & lịch sử phản hồi', $q, ['id' => 'ID', 'type' => 'Loại', 'subject' => 'Nội dung', 'status' => 'Trạng thái', 'response' => 'Phản hồi', 'updated_at' => 'Cập nhật UTC+7']);
             if ($u->role === 'passenger') {
-                $form('support', 'Gửi yêu cầu', [$f('booking_id', 'Booking UUID (không bắt buộc)', 'text-optional'), $f('type', 'Loại', 'select', ['ASSISTANCE' => 'Hỗ trợ đặc biệt', 'COMPLAINT' => 'Khiếu nại', 'BAGGAGE' => 'Hành lý']), $f('subject', 'Chủ đề'), $f('message', 'Nội dung', 'textarea')]);
+                $form('support', 'Gửi yêu cầu', [$f('booking_id', 'Mã đặt chỗ (UUID, không bắt buộc)', 'text-optional'), $f('type', 'Loại', 'select', ['ASSISTANCE' => 'Hỗ trợ đặc biệt', 'COMPLAINT' => 'Khiếu nại', 'BAGGAGE' => 'Hành lý']), $f('subject', 'Chủ đề'), $f('message', 'Nội dung', 'textarea')]);
             } else {
                 $form('support_reply', 'Xử lý hồ sơ', [$f('case_id', 'ID yêu cầu', 'number'), $f('status', 'Trạng thái', 'select', ['IN_PROGRESS' => 'Đang xử lý', 'RESOLVED' => 'Đã giải quyết']), $f('response', 'Phản hồi hành khách', 'textarea')]);
             }
@@ -201,10 +205,10 @@ class WorkspaceController extends Controller
             $quotes = DB::table('exchange_requests as e')->join('bookings as s', 's.id', '=', 'e.source_booking_id')->join('bookings as t', 't.id', '=', 'e.target_booking_id')->select('e.*', 's.amount as source_amount', 't.amount as target_amount');
             $dataset('Yêu cầu đổi vé đã thanh toán', DB::query()->fromSub($quotes, 'exchange_quotes'), ['id' => 'ID yêu cầu', 'source_booking_id' => 'Vé cũ', 'target_booking_id' => 'Giữ chỗ mới', 'source_amount' => 'Sẽ hoàn VND', 'target_amount' => 'Sẽ thu VND', 'status' => 'Trạng thái', 'reason' => 'Lý do', 'approved_by' => 'Người duyệt']);
             $form('exchange_decide', 'Duyệt phương án đổi vé', [$f('exchange_id', 'ID yêu cầu'), $f('approve', 'Quyết định', 'select', [1 => 'Chấp thuận', 0 => 'Từ chối']), $f('scenario', 'Kết quả mua vé mới sandbox', 'select', ['approve' => 'Thành công', 'decline' => 'Bị từ chối'])]);
-            $dataset('Yêu cầu hoàn tiền', $db->table('refunds'), ['id' => 'ID', 'booking_id' => 'Booking', 'amount' => 'VND', 'status' => 'Trạng thái', 'reason' => 'Lý do', 'requested_by' => 'Người yêu cầu', 'approved_by' => 'Người duyệt']);
-            $dataset('Sổ giao dịch', $db->table('ledger_entries'), ['id' => 'ID', 'booking_id' => 'Booking', 'kind' => 'Loại', 'amount' => 'VND', 'created_at' => 'Thời gian UTC+7']);
+                $dataset('Yêu cầu hoàn tiền', $db->table('refunds'), ['id' => 'ID', 'booking_id' => 'Mã đặt chỗ', 'amount' => 'VND', 'status' => 'Trạng thái', 'reason' => 'Lý do', 'requested_by' => 'Người yêu cầu', 'approved_by' => 'Người duyệt']);
+                $dataset('Sổ giao dịch', $db->table('ledger_entries'), ['id' => 'ID', 'booking_id' => 'Mã đặt chỗ', 'kind' => 'Loại', 'amount' => 'VND', 'created_at' => 'Thời gian UTC+7']);
             $dataset('Kỳ đối soát', $db->table('reconciliation_runs'), ['id' => 'ID', 'period_start' => 'Từ (UTC)', 'period_end' => 'Đến (UTC)', 'status' => 'Trạng thái', 'created_by' => 'Người tạo', 'closed_by' => 'Người khóa']);
-            $dataset('Kết quả và sai lệch', $db->table('reconciliation_entries'), ['id' => 'ID', 'run_id' => 'Kỳ', 'booking_id' => 'Booking', 'result' => 'Kết quả', 'detail' => 'Căn cứ', 'resolution' => 'Quyết định']);
+                $dataset('Kết quả và sai lệch', $db->table('reconciliation_entries'), ['id' => 'ID', 'run_id' => 'Kỳ', 'booking_id' => 'Mã đặt chỗ', 'result' => 'Kết quả', 'detail' => 'Căn cứ', 'resolution' => 'Quyết định']);
             $form('refund_decide', 'Phê duyệt hoàn tiền', [$f('refund_id', 'ID yêu cầu', 'number'), $f('approve', 'Quyết định', 'select', [1 => 'Đồng ý hoàn', 0 => 'Từ chối'])]);
             $form('reconcile', 'Tạo kỳ đối soát', [$f('start', 'Từ ngày (UTC)', 'date'), $f('end', 'Đến ngày (UTC)', 'date')]);
             $form('resolve', 'Ghi nhận xử lý sai lệch / chấp nhận ngoại lệ', [$f('entry_id', 'ID sai lệch', 'number'), $f('note', 'Căn cứ xử lý (ít nhất 10 ký tự)', 'textarea')]);
@@ -228,7 +232,7 @@ class WorkspaceController extends Controller
             $flightIds = $source->pluck('id');
             $actual = $source->filter(fn ($x) => $x->actual_departure !== null);
             $onTime = $actual->filter(fn ($x) => Carbon::parse($x->actual_departure)->lte(Carbon::parse($x->departure)->addMinutes(15)))->count();
-            $kpis = ['Chuyến trong 30 ngày gần nhất & kế hoạch' => $source->count(), 'Đúng giờ (chỉ chuyến có giờ thực tế)' => $actual->count() ? round(100 * $onTime / $actual->count(), 1).'%' : 'Chưa đủ dữ liệu', 'Chuyến hủy' => $source->where('status', 'CANCELLED')->count(), 'Nhiệm vụ quá SLA' => $ops->table('ground_tasks')->whereIn('flight_id', $flightIds)->where('status', '!=', 'COMPLETED')->where('due_at', '<', now())->count(), 'Hành khách đã boarding' => DB::table('bookings')->whereIn('flight_id', $flightIds)->where('status', 'BOARDED')->count(), 'Hành lý bất thường' => DB::table('baggage')->whereIn('booking_id', DB::table('bookings')->whereIn('flight_id', $flightIds)->pluck('id'))->where('status', 'MISHANDLED')->count()];
+            $kpis = ['Chuyến trong 30 ngày gần nhất & kế hoạch' => $source->count(), 'Đúng giờ (chỉ chuyến có giờ thực tế)' => $actual->count() ? round(100 * $onTime / $actual->count(), 1).'%' : 'Chưa đủ dữ liệu', 'Chuyến hủy' => $source->where('status', 'CANCELLED')->count(), 'Nhiệm vụ quá SLA' => $ops->table('ground_tasks')->whereIn('flight_id', $flightIds)->where('status', '!=', 'COMPLETED')->where('due_at', '<', now())->count(), 'Hành khách đã lên tàu' => DB::table('bookings')->whereIn('flight_id', $flightIds)->where('status', 'BOARDED')->count(), 'Hành lý bất thường' => DB::table('baggage')->whereIn('booking_id', DB::table('bookings')->whereIn('flight_id', $flightIds)->pluck('id'))->where('status', 'MISHANDLED')->count()];
             $dataset('Chuyến và nguồn tính KPI', $this->scopedFlights($u), ['id' => 'ID', 'number' => 'Chuyến', 'status' => 'Trạng thái', 'departure' => 'Dự kiến UTC+7', 'actual_departure' => 'Thực tế UTC+7']);
             $form('forecast', 'Kiểm tra cảnh báo vận hành', [$f('flight_id', 'Chuyến', 'select', $flights)]);
         }
@@ -267,7 +271,10 @@ class WorkspaceController extends Controller
             return response()->json(['section' => $section, 'title' => $meta[0], 'tables' => $tables, 'kpis' => $kpis]);
         }
         if ($section === 'notifications') {
-            return view('notifications', ['notices' => $tables[0]['rows']]);
+            return view('notifications', [
+                'notices' => $tables[0]['rows'],
+                'unreadCount' => DB::table('notifications')->where('user_id', $u->id)->whereNull('read_at')->count(),
+            ]);
         }
         $forms = app(WorkspaceForms::class)->prepare($forms, $u);
         $presentation = new WorkspacePresentation($tables);
@@ -299,8 +306,10 @@ class WorkspaceController extends Controller
                 }
             }
         }
+        $arrayActions = ['master_propose', 'airport_update', 'season_rule', 'airport_area', 'aircraft_model', 'fare_rule_version', 'baggage_allowance', 'ancillary', 'notification_template', 'customer_interaction', 'system_config', 'dataset', 'model_run', 'recommendation', 'fee_catalog', 'integration_connection'];
+        $arrayKeys = ['changes', 'weekdays', 'cabin_layout', 'rules', 'metadata', 'operating_hours', 'conditions', 'schema_definition', 'metrics', 'explanation', 'configuration'];
         foreach ($d as $key => $value) {
-            abort_if(! is_scalar($value) && $value !== null && ! ($action === 'master_propose' && $key === 'changes' && is_array($value)), 422, 'Dữ liệu không hợp lệ.');
+            abort_if(! is_scalar($value) && $value !== null && ! (in_array($action, $arrayActions, true) && in_array($key, $arrayKeys, true)), 422, 'D? li?u kh?ng h?p l?.');
         }
         if ($action === 'master_propose' && isset($d['changes_json'])) {
             try {
@@ -339,7 +348,15 @@ class WorkspaceController extends Controller
             'resolve' => app(FinanceService::class)->resolve($u, (int) ($d['entry_id'] ?? 0), $d['note'] ?? ''),
             'close_period' => app(FinanceService::class)->close($u, (int) ($d['run_id'] ?? 0)),
             'read_notice' => $this->readNotice($u, $d),
+            'read_all_notices' => $this->readAllNotices($u),
             'fare' => $this->fare($u, $d),
+            'airport_update', 'airport_area', 'season_rule', 'aircraft_model', 'crew_qualification', 'crew_availability', 'crew_roster',
+            'maintenance_item', 'work_item', 'maintenance_material', 'work_material', 'ground_service', 'ground_task_service',
+            'ground_equipment', 'ground_task_equipment', 'ground_handoff', 'integration_connection', 'fare_rule_version',
+            'baggage_allowance', 'ancillary', 'ancillary_decide', 'baggage_incident', 'baggage_incident_resolve', 'notification_template', 'notification_send', 'notification_delivery_update', 'customer_interaction',
+            'system_config', 'document_verify', 'assistance', 'actual_time', 'fee_catalog', 'reconciliation_reason',
+            'reconciliation_adjustment', 'reconciliation_adjustment_decide', 'reconciliation_import', 'dataset', 'model_run',
+            'recommendation', 'support_compensation', 'support_compensation_decide' => app(UseCaseService::class)->execute($u, $action, $d),
             default => app(OperationsService::class)->execute($u, $action, $d),
         };
         if (in_array($action, ['publish', 'publish_batch', 'flight_state', 'allocate', 'approve_disruption', 'refund_request', 'refund_decide', 'exchange_decide', 'resource_decide'])) {
@@ -365,6 +382,16 @@ class WorkspaceController extends Controller
         return (object) ['status' => 'READ'];
     }
 
+    private function readAllNotices(User $u): object
+    {
+        $count = DB::table('notifications')
+            ->where('user_id', $u->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return (object) ['status' => 'READ', 'count' => $count];
+    }
+
     private function fare(User $u, array $d): object
     {
         Access::role($u, 'data_admin');
@@ -380,7 +407,7 @@ class WorkspaceController extends Controller
             abort_if($bookings->count() > $d['capacity'], 409, 'Không được giảm tồn dưới số chỗ đã giữ/bán.');
             foreach ($bookings as $b) {
                 if ($b->seat) {
-                    abort_unless(SeatMap::contains($b->seat, (int) $d['capacity']), 409, 'Ghế đã gán vượt tồn mới.');
+                    abort_unless(SeatMap::contains($b->seat, (int) $d['capacity'], $stock->seat_layout ?? null, $b->fare_class), 409, 'Ghế đã gán vượt tồn mới.');
                 }
             }
             DB::table('inventory')->where('flight_id', $d['flight_id'])->update(['price' => $d['price'], 'capacity' => $d['capacity'], 'status' => $d['status'], 'manual_closed' => $d['status'] === 'CLOSED']);

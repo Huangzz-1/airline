@@ -31,6 +31,6 @@ class ServiceMessage extends Notification implements ShouldBeEncrypted, ShouldQu
 
     public function toMail($notifiable): MailMessage
     {
-        return (new MailMessage)->subject($this->title)->greeting('Xin chào '.$notifiable->name)->line($this->body)->action('Xem thông báo', url('/workspace/notifications'));
+        return (new MailMessage)->subject($this->title)->greeting('Xin chào '.($notifiable->name ?? 'bạn'))->line($this->body)->action('Xem thông báo', url('/workspace/notifications'));
     }
 }

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('content')
-<div class="auth-panel card-surface"><div class="eyebrow">Airline Smart</div><h2>{{ ['login'=>'Chào mừng trở lại','register'=>'Tạo tài khoản hành khách','forgot'=>'Quên mật khẩu','reset'=>'Đặt lại mật khẩu'][$mode] }}</h2><p class="subtle">Quản lý hành trình của bạn ở một nơi.</p>
+<div class="auth-panel card-surface"><div class="eyebrow">Airline Smart</div><h2>{{ ['login'=>'Chào mừng trở lại','register'=>'Tạo tài khoản hành khách','forgot'=>'Quên mật khẩu','reset'=>'Đặt lại mật khẩu'][$mode] }}</h2><p class="subtle">Quản lý hành trình của bạn ở mọi nơi.</p>
 <form method="post" action="{{ ['login'=>'/login','register'=>'/register','forgot'=>'/forgot-password','reset'=>'/reset-password'][$mode] }}">@csrf
 @if($mode==='register')<label class="form-label" for="name">Họ và tên</label><input class="form-control" id="name" name="name" value="{{ old('name') }}" required maxlength="100" autocomplete="name">@endif
 <label class="form-label" for="email">Email</label><input class="form-control" id="email" name="email" type="email" required value="{{ old('email',$email??'') }}" autocomplete="email">

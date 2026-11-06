@@ -4,10 +4,13 @@ namespace App\Modules\Finance;
 
 use App\Modules\Booking\CommerceRepository;
 use App\Modules\Booking\ExchangeService;
+use App\Modules\Booking\TripDetails;
 use App\Modules\Shared\Audit;
 use App\Modules\Shared\Events;
 use App\Modules\Shared\WorkflowRelay;
+use App\Notifications\ServiceMessage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 class OutboxRelay
@@ -116,6 +119,13 @@ class OutboxRelay
             }
             ExchangeService::paymentResult($b, $status);
             Events::notify($b->user_id, 'Kết quả thanh toán', $status === 'CONFIRMED' ? 'Vé đã được phát hành.' : 'Thanh toán bị từ chối. Vui lòng kiểm tra và thử lại.');
+            if ($b->reservation_id) {
+                $contact = TripDetails::decode(DB::table('reservations')->where('id', $b->reservation_id)->value('contact_details'));
+                $ownerEmail = DB::table('users')->where('id', $b->user_id)->value('email');
+                if (! empty($contact['email']) && strcasecmp($contact['email'], $ownerEmail) !== 0) {
+                    Notification::route('mail', [$contact['email'] => $contact['name']])->notify(new ServiceMessage('Kết quả thanh toán · '.$b->reference, $status === 'CONFIRMED' ? 'Vé cho mã đặt chỗ '.$b->reference.' đã được phát hành. Người đặt vé có thể xem và in vé trong tài khoản Airline Smart.' : 'Thanh toán cho mã đặt chỗ '.$b->reference.' chưa thành công.'));
+                }
+            }
             Audit::record('payment.result', $b->id, 'PAYMENT_PENDING', $status, null, 'mysql', $p['correlation_id']);
         }, 3);
     }

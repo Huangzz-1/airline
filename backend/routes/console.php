@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Analytics\AnalyticsService;
 use App\Modules\Booking\BookingService;
+use App\Modules\Customer\SupportDesk;
 use App\Modules\Finance\OutboxRelay;
 use App\Modules\Shared\Access;
 use App\Modules\Shared\Audit;
@@ -26,6 +27,7 @@ Artisan::command('airline:work', function () {
         try {
             app(BookingService::class)->expire();
             app(OutboxRelay::class)->drain();
+            app(SupportDesk::class)->escalateOverdue();
         } catch (Throwable $e) {
             report($e);
         } sleep(2);

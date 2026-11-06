@@ -45,12 +45,16 @@ class CheckoutService
         abort_unless(isset($this->methods()[$method]), 409, 'Phương thức thanh toán chưa sẵn sàng. Vui lòng chọn phương thức khác hoặc liên hệ hỗ trợ.');
         $repo = app(CommerceRepository::class);
         $b = $repo->owned($id, $u->id);
+        abort_if(($b->reservation_initial ?? false) && $b->reservation_id, 409, 'Vui lòng thanh toán toàn bộ hành trình tại mã đặt chỗ chung.');
         $f = app(FlightCatalog::class)->get($b->flight_id);
         abort_unless(in_array($f->status, ['SCHEDULED', 'DELAYED', 'BOARDING']) && now()->lt($f->departure), 409, 'Chuyến không còn nhận thanh toán.');
 
         return DB::transaction(function () use ($u, $b, $method, $ip, $repo) {
             $repo->lockInventory($b->flight_id);
             $b = $repo->locked($b->id);
+            $current = app(FlightCatalog::class)->get($b->flight_id);
+            abort_unless(in_array($current->status, ['SCHEDULED', 'DELAYED', 'BOARDING'], true)
+                && now()->lt($current->departure), 409, 'Chuyến không còn nhận thanh toán.');
             $old = DB::table('checkout_sessions')->where('booking_id', $b->id)->first();
             if ($old) {
                 abort_unless($old->method === $method, 409, 'Đã có yêu cầu thanh toán với phương thức khác.');

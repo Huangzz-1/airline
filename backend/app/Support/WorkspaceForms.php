@@ -20,7 +20,7 @@ class WorkspaceForms
         }
         $flightRows = $flights->orderBy('departure')->limit(500)->get();
         $flightLabels = $flightRows->mapWithKeys(fn ($f) => [$f->id => Ui::flight($f).' · '.Ui::label($f->status)])->all();
-        $bookingQuery = DB::table('bookings as b')->join('users as u', 'u.id', '=', 'b.user_id')->select('b.*', 'u.name as passenger_name');
+        $bookingQuery = DB::table('bookings as b')->join('users as u', 'u.id', '=', 'b.user_id')->leftJoin('reservation_passengers as p', 'p.id', '=', 'b.passenger_id')->select('b.*')->selectRaw('COALESCE(p.name, u.name) AS passenger_name');
         if ($user->role === 'passenger') {
             $bookingQuery->where('b.user_id', $user->id);
         } elseif ($user->role === 'airport_agent') {

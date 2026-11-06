@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Modules\Boarding\BoardingService;
+use App\Modules\Boarding\SeatMap;
 use App\Modules\Flights\FlightCatalog;
 use App\Modules\Shared\Access;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ class PassengerDeskController extends Controller
         Access::role($r->user(), 'airport_agent');
         $d = $r->validate(['q' => 'nullable|string|max:100']);
         $flights = DB::connection('ops')->table('flights')->where('origin', $r->user()->airport_code)->where('departure', '>', now()->subHours(12))->whereNotIn('status', ['DRAFT', 'PENDING'])->get()->keyBy('id');
-        $q = DB::table('bookings as b')->join('users as u', 'u.id', '=', 'b.user_id')->whereIn('b.flight_id', $flights->keys())->select('b.*', 'u.name as passenger_name');
+        $q = DB::table('bookings as b')->join('users as u', 'u.id', '=', 'b.user_id')->leftJoin('reservation_passengers as p', 'p.id', '=', 'b.passenger_id')->leftJoin('reservations as r', 'r.id', '=', 'b.reservation_id')->whereIn('b.flight_id', $flights->keys())->select('b.*')->selectRaw('COALESCE(p.name, u.name) AS passenger_name');
         $q->where(function ($q) use ($d) {
             if (empty($d['q'])) {
                 $q->whereRaw('1=0');
@@ -23,13 +24,14 @@ class PassengerDeskController extends Controller
                 return;
             }
             $term = '%'.addcslashes($d['q'], '\\%_').'%';
-            $q->where('b.reference', 'like', $term)->orWhere('u.name', 'like', $term)->orWhere('u.email', 'like', $term);
+            $q->where('b.reference', 'like', $term)->orWhere('r.reference', 'like', $term)->orWhere('p.name', 'like', $term)->orWhere('u.name', 'like', $term)->orWhere('u.email', 'like', $term);
         });
         $bookings = $q->latest('b.created_at')->paginate(8)->withQueryString();
         foreach ($bookings as $b) {
             $b->flight = $flights[$b->flight_id];
             $stock = DB::table('inventory')->where('flight_id', $b->flight_id)->first();
             $b->capacity = $stock?->capacity ?? 0;
+            $b->availableSeats = SeatMap::seats($b->capacity, $stock?->seat_layout, $b->fare_class);
             $b->frozen = (bool) $stock?->frozen_change_id;
             $b->occupied = DB::table('bookings')->where('flight_id', $b->flight_id)->whereNotNull('seat')->pluck('seat')->all();
         }

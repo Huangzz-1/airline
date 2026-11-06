@@ -1,12 +1,48 @@
 # First-party REST API v1
 
+## Tám nhóm nghiệp vụ bổ sung
+
+Chi tiết quy tắc, giao diện và vai trò: [8 nhóm nghiệp vụ](eight-business-features.md). Các endpoint dưới dùng session đã xác minh, CSRF khi mutation; cùng quyền như giao diện.
+
+| Method | Endpoint | Vai trò / mục đích |
+|---|---|---|
+| GET, POST | `/api/v1/reservations/{id}/details` | Passenger chủ PNR: xem/gửi sửa. POST gồm request_id UUID, passenger_id, version, reason, passenger và contact; phản hồi id/status. |
+| POST | `/api/v1/bookings/{id}/baggage` | Chủ vé: package `kg:tổng_tiền_dự_kiến`, chỉ trước checkout. |
+| GET | `/api/v1/workspace/{section}` | Như các workspace mới trong tài liệu; dữ liệu JSON; export=csv theo trang tương ứng. |
+| POST | `/api/v1/business/{action}` | Action theo bảng dưới; 60 lần/phút, kiểm tra quyền tại service. |
+| GET | `/api/v1/manifests/{id}` | Nhân viên đúng sân bay đọc snapshot; export=csv. |
+| GET | `/api/v1/recovery-offers/{id}` | Khách chủ vé xem phương án đã duyệt, còn hiệu lực. |
+| POST | `/api/v1/recovery-offers/{id}/exchange` | Chủ vé tiếp tục đổi cùng hạng, request_id do server gắn theo offer; lặp trả cùng yêu cầu. |
+
+| Action | Dữ liệu chính | Quyền |
+|---|---|---|
+| fare_rules | fare_id, version, toàn bộ trường trong FareRules::DEFAULTS | data_admin |
+| revision_decide | id, approve 0/1, note | customer_service, khác người yêu cầu |
+| statement_import | multipart source, file CSV | finance |
+| statement_match | id đợt nhập | finance |
+| statement_confirm | id dòng, consent=1 | finance |
+| adjustment_request | request_id, booking_id, amount có dấu, reason, entry_id tùy chọn | finance |
+| adjustment_decide | id, approve 0/1, note | finance khác người lập |
+| checkin_control | id chuyến, mode AUTO/OPEN/CLOSED, opens_at/closes_at tùy chọn, reason | airport_agent/operations/ops_manager đúng sân bay |
+| manifest_finalize | id chuyến | như trên |
+| support_assign | id hồ sơ, assigned_to, priority LOW/NORMAL/HIGH/URGENT, due_at, reason | customer_service |
+| support_escalate | id hồ sơ | customer_service |
+| recovery_propose | request_id, booking_id, target_flight_id, fare_class, reason; hoặc choice `flightId:fareCode` | operations |
+| recovery_decide | id, approve 0/1 | ops_manager khác người lập |
+
+Hết hạn/phiên bản hoặc giá thay đổi trả 409, dữ liệu không hợp lệ 422, sai vai trò/phạm vi 403, tài nguyên của người khác 404. Form HTML có cùng thao tác tại `/workspace/business/{action}`; ngày nhập datetime-local được đổi từ giờ Việt Nam sang UTC.
+
 Cookie session sau login `/login`, `Accept: application/json`; mutation phải gửi CSRF `_token`/`X-CSRF-TOKEN` và cookie phiên. Chưa có bearer token cho hệ thống ngoài. API dùng UTC/ISO8601; datetime-local của form được hiểu theo giờ Việt Nam và đổi UTC. Tiền là VND nguyên.
+
+API PNR chung: `GET/POST /api/v1/reservations`, `GET /api/v1/reservations/{uuid}`, `POST .../{uuid}/pay` và `POST .../{uuid}/cancel`. Payload, giới hạn đặt mới 1 khách/6 chuyến thành phần, thanh toán chung và API cabin được mô tả tại [Đặt hành trình và cabin](reservations-and-cabins.md). Vé thành phần tiếp tục dùng API check-in/boarding/đổi/hoàn hiện có; không thanh toán/hủy riêng vé ban đầu của PNR qua endpoint booking.
+
+Đặt mới yêu cầu `passengers` đúng một phần tử, `passenger_count=1`; chỉ nhận `ONE_WAY` / `ROUND_TRIP`, tối đa hai điểm dừng mỗi lượt. `outbound_count` xác định số chuyến thuộc lượt đi; `contact_details` và `passengers[].details` lưu thông tin liên hệ/hành khách mã hóa. Giao diện chọn chuyến qua `/trip/select`: trả trang xem trước hoặc JSON `{html}` khi Accept là application/json, không tạo giữ chỗ. Bấm tiếp tục rồi nhập thông tin ở `/trip/passengers`, sau đó mới tạo PNR và thanh toán. Xem [luồng đặt chuyến đi](trip-booking.md). `GET /api/v1/flights` nhận `trip_type`, `return_date`, `stops[]=0|1|2`, trả `journey_key`, `stop_count`, `via`, `legs` và giá cộng các chuyến trong cùng lượt.
 
 ## Booking
 
 | Method | Endpoint | Payload / quyền |
 |---|---|---|
-| GET | /api/v1/flights | Public; origin,destination,date (ngày UTC+7),page |
+| GET | /api/v1/flights | Public; origin,destination,date (UTC+7),passenger_count,page,sort,price_min/max,duration_min/max,layover_min/max,available_only,fare_classes[],departure_periods[],arrival_periods[],aircraft_types[],flight_number,carriers[],stops[]. Xem [bộ lọc tìm chuyến](flight-search.md) |
 | GET/POST | /api/v1/bookings | Verified passenger; POST flight_id,idempotency_key,fare_class (default ECONOMY) |
 | GET | /api/v1/bookings/{uuid} | Chỉ chủ |
 | POST | /api/v1/bookings/{uuid}/pay | method=VNPAY/MOMO/BANK; chỉ phương thức đã cấu hình. scenario=approve/decline chỉ dành simulator khi được bật ngoài production, mặc định tắt |
@@ -58,7 +94,7 @@ POST `/api/v1/actions/{action}` (hoặc `/workspace/actions/{action}` cho form).
 - `exchange_request`: request_id,booking_id,flight_id,reason — chủ; `exchange_decide`: exchange_id,approve,scenario approve/decline — finance. Mua mới toàn bộ/hoàn cũ toàn bộ; source chỉ refund sau target capture, target decline không làm mất vé cũ.
 - `reconcile`: start,end ngày UTC (≤93 ngày); `resolve`: entry_id,note (ghi ngoại lệ, không tự sửa tiền); `close_period`: run_id, người khác creator. CSV `/workspace/reports/{id}/export` chỉ kỳ CLOSED.
 - `master_propose`: entity,record_id,changes object,reason; `master_approve`: change_id. Whitelist entity/role trong MasterDataService; snapshot stale bị từ chối. UI dùng field có nhãn, không yêu cầu nhập JSON.
-- `support_reply`: case_id,status,response; `support_followup`: case_id,message chỉ chủ khi chưa resolved; `read_notice`: notification_id chỉ người nhận.
+- `support_reply`: case_id,status,response; `support_followup`: case_id,message chỉ chủ khi chưa resolved; `read_notice`: notification_id chỉ người nhận; `read_all_notices`: đánh dấu toàn bộ thông báo chưa đọc của tài khoản hiện tại.
 - `forecast`: flight_id, trả simulated/model/factors/risk/time/explanation; không tự áp dụng phương án.
 - `fare`: flight_id,price,capacity,status,reason; không giảm dưới số đang giữ/bán hoặc ghế đã gán.
 
@@ -81,6 +117,18 @@ POST `/admin/users` tạo nhân viên (name,email,password,password_confirmation
 200/201 thành công, 202 payment pending; 401 chưa login; 403 thiếu quyền/verify/scope; 404 không tồn tại hoặc không thuộc chủ; 409 state/TTL/conflict/stale/duplicate payload; 419 CSRF; 422 validation; 429 rate limit. Validation JSON có message/errors; không tắt assertion để đổi lỗi thành thành công.
 
 Hold key scoped user, cùng flight+fare trả cùng booking, payload khác trả conflict. Các event dùng UUID và inbox, payment/refund/ticket unique booking. Baggage replay payload khớp không thêm scan, IoT ID/sequence khác payload conflict. FlightChanged source version cũ không đè mới. Refund/paid-exchange pending giữ tồn cho đến kết quả; không expire tài chính chưa rõ.
+
+## Module dashboards (M1–M3)
+
+Các màn hình `/modules/m1`, `/modules/m2` và `/modules/m3` dùng cùng session/CSRF với workspace. API đọc tương ứng là `GET /api/v1/modules/{m1|m2|m3}`; dữ liệu được giới hạn theo role và `airport_code` của người dùng scoped.
+
+Form trên dashboard gửi `POST /api/v1/modules/{module}/actions/{action}`. Controller chuyển tiếp vào các domain service hiện có, vì vậy mọi kiểm tra quyền, trạng thái và idempotency vẫn áp dụng như API gốc. Các action chính:
+
+- M1: `airport_update`, `airport_area`, `aircraft_model`, `crew_qualification`, `maintenance_item`, `ground_service`, `actual_time`.
+- M2: `support`, `assistance`, `bag_scan`, `baggage_incident`, `document_verify`, `change_seat`.
+- M3: `device`, `telemetry`, `dataset`, `model_run`, `recommendation`, `forecast`.
+
+M3 đánh dấu rõ dữ liệu forecast là mô phỏng; kết quả chỉ là thông tin hỗ trợ vận hành và không tự động thay đổi trạng thái chuyến bay.
 
 ## Dịch vụ local
 

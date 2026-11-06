@@ -1,0 +1,9 @@
+@extends('layouts.app')
+@section('title','Duyệt sửa thông tin hành khách · Airline Smart')
+@section('content')
+@php($ui=\App\Support\Ui::class)
+@php($biz=\App\Support\BusinessUi::class)
+@include('business.heading',['title'=>'Đối chiếu sửa thông tin hành khách'])
+<section class="card-surface business-card"><p>{{ $change->reason }} · {{ $ui::date($change->created_at) }} · {{ $biz::status($change->status) }}</p><p>Họ tên hiện tại: <strong>{{ $before['name'] }}</strong></p><div class="table-responsive"><table class="table"><thead><tr><th>Thông tin</th><th>Trước</th><th>Đề nghị</th></tr></thead><tbody>@foreach(['surname'=>'Họ','given_name'=>'Chữ đệm và tên','nationality'=>'Quốc tịch','gender'=>'Giới tính','date_of_birth'=>'Ngày sinh','document_number'=>'Số giấy tờ','document_expiry'=>'Ngày hết hạn'] as $key=>$label)<tr><td>{{ $label }}</td><td>{{ $before['passenger'][$key] ?? ($key==='date_of_birth' ? $before['date_of_birth'] : '—') }}</td><td>{{ $after['passenger'][$key] ?? '—' }}</td></tr>@endforeach @foreach(['name'=>'Tên liên hệ','email'=>'Email liên hệ','phone'=>'Điện thoại liên hệ'] as $key=>$label)<tr><td>{{ $label }}</td><td>{{ $before['contact'][$key] ?? '—' }}</td><td>{{ $after['contact'][$key] }}</td></tr>@endforeach</tbody></table></div>
+@if($change->status==='PENDING')<form method="post" action="/workspace/business/revision_decide">@csrf<input type="hidden" name="id" value="{{ $change->id }}"><label class="d-block">Ghi chú quyết định<textarea class="form-control mb-3" name="note" minlength="5" maxlength="1000" required></textarea></label><button class="btn btn-primary" name="approve" value="1">Duyệt cập nhật</button><button class="btn btn-outline-danger" name="approve" value="0">Từ chối</button></form>@else<p class="alert alert-info">{{ $change->decision_note }}</p>@endif</section>
+@endsection

@@ -1,5 +1,8 @@
 @extends('layouts.app')
 @section('content')
+@if(($unreadCount ?? 0) > 0)
+<form method="post" action="/workspace/actions/read_all_notices" class="mb-4">@csrf<button class="btn btn-outline-primary">Đánh dấu tất cả đã đọc</button></form>
+@endif
 <div class="eyebrow">Tài khoản cá nhân</div><h1>Thông báo</h1>
 @forelse($notices as $notice)<article class="card-surface mb-3 {{ $notice->read_at?'':'notice-unread' }}"><div class="d-flex justify-content-between gap-3 flex-wrap"><h2>{{ $notice->title }}</h2><small class="subtle">{{ \App\Support\Ui::date($notice->created_at) }}</small></div><p>{{ $notice->body }}</p>
 @if(!$notice->read_at)<form method="post" action="/workspace/actions/read_notice">@csrf<input type="hidden" name="notification_id" value="{{ $notice->id }}"><button class="btn btn-outline-primary">Đánh dấu đã đọc</button></form>@else<small class="subtle">Đã đọc</small>@endif</article>

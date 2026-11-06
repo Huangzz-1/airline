@@ -25,6 +25,7 @@ class AccountController extends Controller
     public function create(Request $r)
     {
         Access::role($r->user(), 'admin');
+        $r->merge(['email' => strtolower(trim((string) $r->input('email')))]);
         $d = $r->validate(['name' => 'required|string|max:100', 'email' => 'required|email|max:190|unique:users', 'password' => ['required', 'confirmed', Password::min(10)], 'role' => ['required', Rule::in(array_diff(Access::ROLES, ['passenger']))], 'airport_code' => 'nullable|string|size:3']);
         if (in_array($d['role'], Access::SCOPED)) {
             abort_unless(DB::connection('ops')->table('airports')->where('code', $d['airport_code'] ?? '')->exists(), 422, 'Vui lòng chọn sân bay được phân công.');

@@ -1,6 +1,8 @@
 @if($checkout && $checkout->status==='READY')
 @if($checkout->method==='BANK')
 @php($bank=json_decode($checkout->bank_details,true))
+@php($bankQr=app(\App\Modules\Finance\BankTransferQr::class)->svg($bank, (int)$booking->amount, $checkout->mode))
+@if($bankQr)<figure class="bank-qr-container"><div class="bank-transfer-qr" data-bank-transfer-qr role="img" aria-label="Mã VietQR chuyển khoản ngân hàng">{!! $bankQr !!}</div><figcaption class="subtle">Quét bằng ứng dụng ngân hàng. Kiểm tra người nhận, số tiền và nội dung trước khi chuyển.</figcaption></figure>@endif
 <h3>Chuyển khoản ngân hàng</h3><dl class="checkout-details"><dt>Ngân hàng</dt><dd>{{ $bank['name'] }}</dd><dt>Số tài khoản</dt><dd><strong>{{ $bank['account_number'] }}</strong></dd><dt>Chủ tài khoản</dt><dd>{{ $bank['account_name'] }}</dd><dt>Số tiền</dt><dd>{{ $ui::money($booking->amount) }}</dd><dt>Nội dung chuyển khoản</dt><dd><strong>{{ $bank['content'] }}</strong></dd></dl>
 @if($checkout->mode==='mock')<p class="subtle">Thông tin ngân hàng thử nghiệm. Không chuyển tiền thật.</p>@endif
 <p class="subtle">Chuyển đúng số tiền và nội dung. Vé được xuất sau khi tài chính đối chiếu khoản tiền nhận được.</p>

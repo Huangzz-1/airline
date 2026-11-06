@@ -4,6 +4,7 @@ namespace App\Modules\Finance;
 
 use App\Models\User;
 use App\Modules\Booking\CommerceRepository;
+use App\Modules\Booking\FareRules;
 use App\Modules\Flights\FlightCatalog;
 use App\Modules\Shared\Access;
 use App\Modules\Shared\Audit;
@@ -31,9 +32,11 @@ class FinanceService
                 return $b;
             }
             abort_unless(in_array($b->status, ['CONFIRMED', 'CHECKED_IN']), 409, 'Đặt chỗ không đủ điều kiện hoàn.');
+            $quote = FareRules::refundQuote($b, app(FlightCatalog::class)->get($b->flight_id));
+            abort_unless($quote['allowed'], 409, 'Hạng vé không cho hoàn hoặc đã quá thời hạn hoàn.');
             DB::table('bookings')->where('id', $b->id)->update(['status' => 'REFUND_PENDING', 'seat' => null, 'updated_at' => now()]);
             DB::table('boarding_passes')->where('booking_id', $b->id)->update(['revoked_at' => now()]);
-            Events::emit('mysql', 'RefundRequested', ['booking_id' => $b->id, 'amount' => $b->amount, 'reason' => $reason, 'requested_by' => $u->id, 'automatic' => false]);
+            Events::emit('mysql', 'RefundRequested', ['booking_id' => $b->id, 'amount' => $quote['amount'], 'gross_amount' => $b->amount, 'fee' => $quote['fee'], 'reason' => $reason, 'requested_by' => $u->id, 'automatic' => false]);
             Audit::record('refund.requested', $b->id, $b->status, 'REFUND_PENDING', $u->id);
 
             return $repo->owned($b->id, $u->id);
@@ -191,6 +194,7 @@ class FinanceService
             $run = $db->table('reconciliation_runs')->where('id', $id)->lockForUpdate()->first() ?? abort(404);
             abort_unless($run->status === 'OPEN' && $run->created_by !== $u->id, 409, 'Cần người khóa kỳ độc lập.');
             abort_if($db->table('reconciliation_entries')->where('run_id', $id)->where('result', 'MISMATCH')->exists(), 409, 'Còn sai lệch chưa xử lý.');
+            abort_if($db->table('financial_adjustments')->whereIn('entry_id', $db->table('reconciliation_entries')->where('run_id', $id)->select('id'))->where('status', 'PENDING')->exists(), 409, 'Còn phiếu điều chỉnh chờ duyệt trong kỳ.');
             $db->table('reconciliation_runs')->where('id', $id)->update(['status' => 'CLOSED', 'closed_by' => $u->id, 'updated_at' => now()]);
             Audit::record('reconciliation.closed', (string) $id, 'OPEN', 'CLOSED', $u->id, 'finance');
 

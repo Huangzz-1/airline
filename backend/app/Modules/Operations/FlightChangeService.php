@@ -38,7 +38,7 @@ class FlightChangeService
                 $new = $this->db()->table('aircraft')->find((int) $d['target_aircraft_id']) ?? abort(422, 'Tàu mới không tồn tại.');
                 $old = $this->db()->table('aircraft')->find($f->aircraft_id);
                 abort_unless($new->status === 'AVAILABLE' && $new->type === $old->type, 409, 'Chọn tàu bay khả dụng cùng loại và năng định.');
-                $after = ['aircraft_id' => $new->id, 'capacity' => $new->capacity];
+                $after = ['aircraft_id' => $new->id, 'capacity' => $new->capacity, 'seat_layout' => $new->seat_layout ?? null];
             } else {
                 abort_unless(! empty($d['crew_ids']), 422, 'Cần danh sách tổ bay mới.');
                 $ids = array_values(array_unique(array_map('intval', explode(',', $d['crew_ids']))));
@@ -94,7 +94,7 @@ class FlightChangeService
             }
             $old = $this->db()->table('aircraft')->find($f->aircraft_id);
             $new = $this->db()->table('aircraft')->find($after['aircraft_id']);
-            abort_unless($new && $new->status === 'AVAILABLE' && $new->type === $old->type && $new->capacity === $after['capacity'], 409, 'Tàu mới không còn phù hợp với phương án.');
+            abort_unless($new && $new->status === 'AVAILABLE' && $new->type === $old->type && $new->capacity === $after['capacity'] && ($new->seat_layout ?? null) === ($after['seat_layout'] ?? null), 409, 'Tàu mới không còn phù hợp với phương án.');
             $this->assertAvailable($new->id, $f);
             $candidate = (object) array_merge((array) $f, ['aircraft_id' => $new->id]);
             $this->validateCrew($this->crewIds($f->id), $candidate);
@@ -104,7 +104,7 @@ class FlightChangeService
             $fence = $f->version + 1;
             $this->db()->table('flights')->where('id', $f->id)->update(['status' => 'CHANGE_PENDING', 'pending_change_id' => $p->id, 'version' => $fence]);
             $this->db()->table('flight_changes')->where('id', $p->id)->update(['status' => 'PREPARING', 'approved_by' => $u->id, 'updated_at' => now()]);
-            Events::emit('ops', 'AircraftChangePrepare', ['change_id' => $p->id, 'flight_id' => $f->id, 'target_aircraft_id' => $new->id, 'capacity' => $new->capacity, 'fence_version' => $fence, 'departure' => $f->departure, 'number' => $f->number]);
+            Events::emit('ops', 'AircraftChangePrepare', ['change_id' => $p->id, 'flight_id' => $f->id, 'target_aircraft_id' => $new->id, 'capacity' => $new->capacity, 'seat_layout' => $after['seat_layout'] ?? null, 'fence_version' => $fence, 'departure' => $f->departure, 'number' => $f->number]);
             Audit::record('aircraft_change.preparing', $p->id, 'PENDING', 'PREPARING', $u->id, 'ops');
 
             return $this->db()->table('flight_changes')->find($p->id);
@@ -149,7 +149,7 @@ class FlightChangeService
     {
         $f = $this->db()->table('flights')->find($id);
         $plane = $this->db()->table('aircraft')->find($f->aircraft_id);
-        Events::emit('ops', 'FlightChanged', ['flight_id' => $id, 'status' => $f->status, 'version' => $f->version, 'capacity' => $plane->capacity, 'price' => $f->sale_price, 'number' => $f->number, 'origin' => $f->origin, 'departure' => $f->departure, 'notice' => $notice]);
+        Events::emit('ops', 'FlightChanged', ['flight_id' => $id, 'status' => $f->status, 'version' => $f->version, 'capacity' => $plane->capacity, 'seat_layout' => $plane->seat_layout ?? null, 'price' => $f->sale_price, 'number' => $f->number, 'origin' => $f->origin, 'departure' => $f->departure, 'notice' => $notice]);
     }
 
     public function prepared(string $event, array $data): void
@@ -181,7 +181,7 @@ class FlightChangeService
             }
             $this->db()->table('flight_changes')->where('id', $p->id)->update(['status' => 'COMMITTING', 'updated_at' => now()]);
             $after = json_decode($p->after_data, true);
-            Events::emit('ops', 'AircraftChangeCommit', ['change_id' => $p->id, 'flight_id' => $f->id, 'fence_version' => $f->version, 'target_aircraft_id' => $after['aircraft_id'], 'capacity' => $after['capacity'], 'departure' => $f->departure, 'number' => $f->number]);
+            Events::emit('ops', 'AircraftChangeCommit', ['change_id' => $p->id, 'flight_id' => $f->id, 'fence_version' => $f->version, 'target_aircraft_id' => $after['aircraft_id'], 'capacity' => $after['capacity'], 'seat_layout' => $after['seat_layout'] ?? null, 'departure' => $f->departure, 'number' => $f->number]);
             Audit::record('aircraft_change.ready', $p->id, 'PREPARING', 'COMMITTING', null, 'ops');
         }, 3);
     }

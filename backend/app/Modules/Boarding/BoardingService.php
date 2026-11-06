@@ -19,18 +19,19 @@ class BoardingService
         $b = $this->repo->owned($id, $user);
         $f = $this->catalog->get($b->flight_id);
         $departure = Carbon::parse($f->departure);
-        abort_unless(in_array($f->status, ['SCHEDULED', 'BOARDING', 'DELAYED']) && now()->gte($departure->copy()->subHours(24)) && now()->lt($departure->copy()->subMinutes(30)), 409, 'Ngoài thời gian check-in hoặc chuyến không hợp lệ.');
+        abort_unless(BoardingOperations::canCheckin($f), 409, 'Ngoài thời gian check-in, nhân viên đã khóa check-in hoặc chuyến không hợp lệ.');
 
         return DB::transaction(function () use ($b, $user, $seat, $departure, $actor) {
             $stock = $this->repo->lockInventory($b->flight_id);
+            abort_unless(BoardingOperations::canCheckin($this->catalog->get($b->flight_id)), 409, 'Cửa sổ check-in đã thay đổi.');
             $b = $this->repo->locked($b->id);
             if ($b->status === 'CHECKED_IN') {
                 abort_unless($b->seat === $seat, 409, 'Đổi ghế chưa được hỗ trợ.');
 
                 return $this->pass($b->id, $user);
             }
-            abort_unless($b->status === 'CONFIRMED', 409, 'Cần vé đã thanh toán để check-in.');
-            abort_unless(SeatMap::contains($seat, $stock->capacity), 422, 'Ghế không tồn tại.');
+            abort_unless($b->status === 'CONFIRMED', 409, 'Cần có vé đã thanh toán để check-in.');
+            abort_unless(SeatMap::contains($seat, $stock->capacity, $stock->seat_layout ?? null, $b->fare_class), 422, 'Ghế không tồn tại hoặc không thuộc khoang của hạng vé.');
             abort_if(DB::table('bookings')->where('flight_id', $b->flight_id)->where('seat', $seat)->exists(), 409, 'Ghế đã được chọn.');
             DB::table('bookings')->where('id', $b->id)->update(['status' => 'CHECKED_IN', 'seat' => $seat, 'updated_at' => now()]);
             $token = bin2hex(random_bytes(32));

@@ -9,6 +9,7 @@ class Ui
     public static function label(?string $value): string
     {
         return [
+            'BUSINESS' => 'Thương gia', 'PREMIUM' => 'Phổ thông cao cấp', 'FLEX' => 'Phổ thông linh hoạt',
             'APPROVED' => 'Đã duyệt, chờ chi tiền', 'REPORTED' => 'Khách báo đã chuyển tiền', 'PROCESSING' => 'Đang xử lý', 'VNPAY' => 'VNPay', 'MOMO' => 'Ví MoMo', 'BANK' => 'Chuyển khoản',
             'HELD' => 'Chờ thanh toán', 'PAYMENT_PENDING' => 'Đang xử lý thanh toán', 'CONFIRMED' => 'Đã xuất vé', 'CHECKED_IN' => 'Đã làm thủ tục', 'BOARDED' => 'Đã lên tàu bay',
             'EXPIRED' => 'Hết hạn giữ chỗ', 'CANCELLED' => 'Đã hủy', 'REFUND_PENDING' => 'Đang xử lý hoàn tiền', 'REFUNDED' => 'Đã hoàn tiền', 'EXCHANGE_PENDING' => 'Đang đổi vé',

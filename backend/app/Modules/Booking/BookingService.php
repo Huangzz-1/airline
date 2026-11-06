@@ -2,6 +2,7 @@
 
 namespace App\Modules\Booking;
 
+use App\Modules\Boarding\SeatMap;
 use App\Modules\Flights\FlightCatalog;
 use App\Modules\Shared\Audit;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,12 @@ class BookingService
 
         return DB::transaction(function () use ($user, $flight, $key, $fareClass) {
             $stock = $this->repo->lockInventory($flight);
+            // Re-read the authoritative flight row after taking the inventory
+            // lock. A schedule can be cancelled or closed between the initial
+            // availability check and this transaction.
+            $current = $this->catalog->get($flight);
+            abort_unless(in_array($current->status, ['SCHEDULED', 'BOARDING', 'DELAYED'], true)
+                && now()->lt($current->departure), 409, 'Chuyến không còn mở bán.');
             abort_unless($stock->status === 'OPEN', 409, 'Tồn chỗ đang đóng.');
             $old = DB::table('bookings')->where('user_id', $user)->where('idempotency_key', $key)->first();
             if ($old) {
@@ -28,6 +35,12 @@ class BookingService
             $this->expireFlight($flight);
             $used = DB::table('bookings')->where('flight_id', $flight)->whereIn('status', ['HELD', 'PAYMENT_PENDING', 'CONFIRMED', 'CHECKED_IN', 'BOARDED', 'REFUND_PENDING', 'EXCHANGE_PENDING'])->count();
             abort_if($used >= $stock->capacity, 409, 'Chuyến đã hết chỗ.');
+            if ($stock->seat_layout ?? null) {
+                $cabin = SeatMap::cabin($fareClass);
+                $occupied = DB::table('bookings')->where('flight_id', $flight)->whereIn('status', ['HELD', 'PAYMENT_PENDING', 'CONFIRMED', 'CHECKED_IN', 'BOARDED', 'REFUND_PENDING', 'EXCHANGE_PENDING']);
+                $cabin === 'ECONOMY' ? $occupied->whereNotIn('fare_class', ['BUSINESS', 'PREMIUM']) : $occupied->where('fare_class', $cabin);
+                abort_if($occupied->count() >= count(SeatMap::seats($stock->capacity, $stock->seat_layout, $fareClass)), 409, 'Khoang tương ứng đã hết chỗ.');
+            }
             $fare = DB::table('fare_classes')->where('flight_id', $flight)->where('code', $fareClass)->first();
             abort_unless($fareClass === 'ECONOMY' || $fare, 422, 'Hạng giá không tồn tại.');
             if ($fare) {
@@ -37,7 +50,7 @@ class BookingService
             $id = (string) Str::uuid();
             DB::table('bookings')->insert([
                 'id' => $id, 'reference' => strtoupper(Str::random(8)), 'user_id' => $user, 'flight_id' => $flight, 'idempotency_key' => $key,
-                'fare_class' => $fareClass, 'status' => 'HELD', 'amount' => $fare?->price ?? $stock->price, 'expires_at' => now()->addMinutes(10), 'created_at' => now(), 'updated_at' => now(),
+                'fare_class' => $fareClass, 'status' => 'HELD', 'amount' => $fare?->price ?? $stock->price, 'base_amount' => $fare?->price ?? $stock->price, 'fare_rules' => FareRules::snapshot($fare), 'expires_at' => now()->addMinutes(10), 'created_at' => now(), 'updated_at' => now(),
             ]);
             Audit::record('booking.held', $id, null, 'HELD', $user);
 
@@ -70,6 +83,8 @@ class BookingService
     {
         $b = $this->repo->owned($id, $user);
 
+        abort_if(($b->reservation_initial ?? false) && $b->reservation_id, 409, 'Vui lòng hủy giữ chỗ tại mã đặt chỗ chung.');
+
         return DB::transaction(function () use ($b, $user) {
             $this->repo->lockInventory($b->flight_id);
             $b = $this->repo->locked($b->id);
@@ -89,12 +104,16 @@ class BookingService
     {
         abort_unless(config('payments.simulator_enabled') && ! app()->environment('production'), 403, 'Thanh toán thử nghiệm đã bị tắt. Vui lòng chọn phương thức thanh toán.');
         $b = $this->repo->owned($id, $user);
+        abort_if(($b->reservation_initial ?? false) && $b->reservation_id, 409, 'Vui lòng thanh toán tại mã đặt chỗ chung.');
         abort_if(DB::table('exchange_requests')->where('target_booking_id', $id)->whereIn('status', ['PENDING', 'PROCESSING'])->exists(), 409, 'Vé này thuộc yêu cầu đổi; cần phê duyệt theo quy trình đổi vé.');
         $f = $this->catalog->get($b->flight_id);
         abort_unless(in_array($f->status, ['SCHEDULED', 'BOARDING', 'DELAYED']) && now()->lt($f->departure), 409, 'Chuyến không thể thanh toán.');
 
         return DB::transaction(function () use ($b, $user, $scenario) {
             $this->repo->lockInventory($b->flight_id);
+            $current = $this->catalog->get($b->flight_id);
+            abort_unless(in_array($current->status, ['SCHEDULED', 'BOARDING', 'DELAYED'], true)
+                && now()->lt($current->departure), 409, 'Chuyến không thể thanh toán.');
             $b = $this->repo->locked($b->id);
             if (in_array($b->status, ['PAYMENT_PENDING', 'CONFIRMED', 'CHECKED_IN', 'BOARDED'])) {
                 abort_unless($b->payment_scenario === $scenario, 409, 'Không được thay đổi kết quả sandbox khi gửi lại.');

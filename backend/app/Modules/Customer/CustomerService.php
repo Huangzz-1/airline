@@ -20,7 +20,7 @@ class CustomerService
         }
 
         return DB::transaction(function () use ($u, $d) {
-            $id = DB::table('support_cases')->insertGetId($d + ['user_id' => $u->id, 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('support_cases')->insertGetId($d + ['user_id' => $u->id, 'priority' => $d['type'] === 'ASSISTANCE' ? 'NORMAL' : 'HIGH', 'due_at' => now()->addHours($d['type'] === 'ASSISTANCE' ? 48 : 24), 'created_at' => now(), 'updated_at' => now()]);
             DB::table('support_messages')->insert(['case_id' => $id, 'sender_id' => $u->id, 'sender_role' => 'passenger', 'body' => $d['message'], 'created_at' => now()]);
             Audit::record('support.created', (string) $id, null, 'OPEN', $u->id);
 
@@ -36,7 +36,8 @@ class CustomerService
         return DB::transaction(function () use ($u, $id, $d) {
             $case = DB::table('support_cases')->where('id', $id)->lockForUpdate()->first() ?? abort(404);
             abort_if($case->status === 'RESOLVED', 409, 'Hồ sơ đã đóng.');
-            DB::table('support_cases')->where('id', $id)->update($d + ['handled_by' => $u->id, 'updated_at' => now()]);
+            abort_if($case->assigned_to && $case->assigned_to !== $u->id, 403, 'Hồ sơ đã được giao cho nhân viên khác.');
+            DB::table('support_cases')->where('id', $id)->update($d + ['handled_by' => $u->id, 'assigned_to' => $u->id, 'resolved_at' => $d['status'] === 'RESOLVED' ? now() : null, 'updated_at' => now()]);
             DB::table('support_messages')->insert(['case_id' => $id, 'sender_id' => $u->id, 'sender_role' => 'customer_service', 'body' => $d['response'], 'created_at' => now()]);
             Events::notify($case->user_id, 'Phản hồi hỗ trợ #'.$id, $d['response']);
             Audit::record('support.responded', (string) $id, $case->status, $d['status'], $u->id);
@@ -69,8 +70,8 @@ class CustomerService
             abort_if($case->status === 'RESOLVED', 409, 'Hồ sơ đã đóng; hãy tạo yêu cầu mới.');
             DB::table('support_messages')->insert(['case_id' => $id, 'sender_id' => $u->id, 'sender_role' => 'passenger', 'body' => $message, 'created_at' => now()]);
             DB::table('support_cases')->where('id', $id)->update(['updated_at' => now()]);
-            if ($case->handled_by) {
-                Events::notify($case->handled_by, 'Phản hồi mới trong hỗ trợ #'.$id, 'Hành khách đã bổ sung nội dung.');
+            if ($case->assigned_to ?? $case->handled_by) {
+                Events::notify($case->assigned_to ?? $case->handled_by, 'Phản hồi mới trong hỗ trợ #'.$id, 'Hành khách đã bổ sung nội dung.');
             }Audit::record('support.followup', (string) $id, $case->status, $case->status, $u->id);
 
             return (object) ['id' => $id];

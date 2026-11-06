@@ -2,7 +2,7 @@
   "name": "airline-smart",
   "private": true,
   "scripts": {
-    "assets": "cp node_modules/bootstrap/dist/css/bootstrap.min.css backend/public/bootstrap.min.css",
+    "assets": "node scripts/sync-frontend.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {"bootstrap": "5.3.8"},

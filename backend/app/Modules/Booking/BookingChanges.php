@@ -19,6 +19,7 @@ class BookingChanges
         $d = Validator::make($data, ['booking_id' => 'required|uuid', 'flight_id' => 'required|integer', 'request_id' => 'required|uuid'])->validate();
         $repo = app(CommerceRepository::class);
         $b = $repo->owned($d['booking_id'], $u->id);
+        abort_if($b->reservation_id ?? null, 409, 'Vui lòng hủy giữ chỗ chung và chọn lại hành trình trước khi thanh toán.');
         $old = app(FlightCatalog::class)->get($b->flight_id);
         $target = app(FlightCatalog::class)->get((int) $d['flight_id']);
 
@@ -50,7 +51,10 @@ class BookingChanges
                 abort_unless($fare->active, 409, 'Hạng giá đóng.');
                 abort_if((clone $active)->where('fare_class', $b->fare_class)->count() >= $fare->quota, 409, 'Hạng giá đã hết chỗ.');
             }
-            DB::table('bookings')->where('id', $b->id)->update(['flight_id' => $target->id, 'amount' => $fare?->price ?? $stock->price, 'updated_at' => now()]);
+            $rules = FareRules::decode($fare?->rules ?? null);
+            abort_if($rules['included_baggage_kg'] + $b->baggage_kg > 64, 409, 'Hành lý đã chọn không phù hợp hạng vé mới.');
+            $extra = $b->baggage_kg * $rules['extra_baggage_price_per_kg'];
+            DB::table('bookings')->where('id', $b->id)->update(['flight_id' => $target->id, 'amount' => ($fare?->price ?? $stock->price) + $extra, 'base_amount' => $fare?->price ?? $stock->price, 'baggage_amount' => $extra, 'fare_rules' => FareRules::snapshot($fare), 'updated_at' => now()]);
             DB::table('booking_changes')->insert(['request_id' => $d['request_id'], 'booking_id' => $b->id, 'flight_id' => $target->id, 'created_at' => now()]);
             Audit::record('booking.changed', $b->id, (string) $b->flight_id, (string) $target->id, $u->id);
             Events::notify($u->id, 'Đã đổi chuyến giữ chỗ', 'Chuyến mới '.$target->number.'. Thời hạn giữ chỗ giữ nguyên; vui lòng kiểm tra giá mới.');

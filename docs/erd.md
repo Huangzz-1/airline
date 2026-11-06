@@ -22,12 +22,18 @@ erDiagram
  DB1_FLIGHTS ||--|| DB2_INVENTORY : projection_no_cross_FK
  DB2_INVENTORY ||--o{ DB2_FARE_CLASSES : quotas
  DB2_USERS ||--o{ DB2_BOOKINGS : owns
+ DB2_USERS ||--o{ DB2_RESERVATIONS : manages_pnr
+ DB2_RESERVATIONS ||--|{ DB2_RESERVATION_PASSENGERS : travelers
+ DB2_RESERVATIONS ||--|{ DB2_RESERVATION_SEGMENTS : itinerary
+ DB2_RESERVATIONS ||--|{ DB2_BOOKINGS : passenger_segment_coupons
+ DB2_RESERVATION_PASSENGERS ||--|{ DB2_BOOKINGS : named_passenger
+ DB2_RESERVATION_SEGMENTS ||--|{ DB2_BOOKINGS : coupon_leg
  DB2_USERS ||--o| DB2_EMAIL_VERIFICATIONS : hashed_otp
  DB2_INVENTORY ||--o{ DB2_BOOKINGS : stock_lock
  DB2_BOOKINGS ||--o| DB2_TICKETS : issues
  DB2_BOOKINGS ||--o| DB2_CHECKOUT_SESSIONS : payment_request
- DB2_CHECKOUT_SESSIONS ||--o| DB3_CHECKOUT_INTENTS : logical_no_cross_FK
- DB3_CHECKOUT_INTENTS ||--o| DB3_PAYMENTS : verified_settlement
+ DB3_CHECKOUT_INTENTS ||--|{ DB2_CHECKOUT_SESSIONS : shared_pnr_or_single_no_cross_FK
+ DB3_CHECKOUT_INTENTS ||--o{ DB3_PAYMENTS : allocated_settlement
  DB2_BOOKINGS ||--o| DB2_BOARDING_PASSES : checkin
  DB2_BOOKINGS ||--o{ DB2_BAGGAGE : tags
  DB2_BAGGAGE ||--o{ DB2_BAGGAGE_EVENTS : custody

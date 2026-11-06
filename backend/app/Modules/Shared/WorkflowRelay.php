@@ -41,7 +41,7 @@ class WorkflowRelay
 
                 return;
             }
-            DB::table('inventory')->insertOrIgnore(['flight_id' => $p['flight_id'], 'capacity' => $p['capacity'], 'price' => $p['price'], 'status' => 'OPEN', 'source_version' => 0]);
+            DB::table('inventory')->insertOrIgnore(['flight_id' => $p['flight_id'], 'capacity' => $p['capacity'], 'price' => $p['price'], 'seat_layout' => $p['seat_layout'] ?? null, 'status' => 'OPEN', 'source_version' => 0]);
             $repo = app(CommerceRepository::class);
             $stock = $repo->lockInventory($p['flight_id'], true);
             if (DB::table('inbox')->where('id', $id)->exists()) {
@@ -96,11 +96,14 @@ class WorkflowRelay
             if (! in_array($payment->status, ['CAPTURED', 'REFUNDED'])) {
                 throw new \RuntimeException('Refund requires a captured payment');
             }
-            if ((int) $payment->amount !== (int) $p['amount']) {
+            if ((int) $payment->amount !== (int) ($p['gross_amount'] ?? $p['amount']) || $p['amount'] <= 0 || ($p['fee'] ?? 0) < 0 || (int) $payment->amount !== $p['amount'] + ($p['fee'] ?? 0) || ($p['automatic'] && $p['amount'] !== (int) $payment->amount)) {
                 throw new \RuntimeException('Refund amount mismatch');
             }
             $db->table('refunds')->insertOrIgnore(['booking_id' => $p['booking_id'], 'amount' => $p['amount'], 'reason' => $p['reason'], 'requested_by' => $p['requested_by'], 'created_at' => now(), 'updated_at' => now()]);
             $r = $db->table('refunds')->where('booking_id', $p['booking_id'])->lockForUpdate()->first();
+            if (($r->status === 'REJECTED' || $p['automatic']) && $r->status !== 'REFUNDED') {
+                $db->table('refunds')->where('id', $r->id)->update(['amount' => $p['amount'], 'reason' => $p['reason']]);
+            }
             if ($r->status === 'REJECTED') {
                 $db->table('refunds')->where('id', $r->id)->update(['status' => 'REQUESTED', 'reason' => $p['reason'], 'requested_by' => $p['requested_by'], 'approved_by' => null, 'updated_at' => now()]);
             }
@@ -140,7 +143,7 @@ class WorkflowRelay
             if ($status === 'REFUNDED') {
                 DB::table('exchange_requests')->where('source_booking_id', $b->id)->where('status', 'REFUNDING')->update(['status' => 'COMPLETED', 'updated_at' => now()]);
             }
-            Events::notify($b->user_id, 'Kết quả hoàn vé', $status === 'REFUNDED' ? 'Đã hoàn toàn bộ giá vé.' : 'Yêu cầu hoàn bị từ chối, vé có hiệu lực trở lại; cần check-in lại.');
+            Events::notify($b->user_id, 'Kết quả hoàn vé', $status === 'REFUNDED' ? 'Khoản hoàn đã được xác nhận theo hồ sơ hoàn vé.' : 'Yêu cầu hoàn bị từ chối, vé có hiệu lực trở lại; cần làm thủ tục lại.');
             Audit::record('refund.result', $b->id, 'REFUND_PENDING', $status);
         }, 3);
     }

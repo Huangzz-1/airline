@@ -28,8 +28,8 @@ class PassengerChanges
         return DB::transaction(function () use ($repo, $u, $b, $d, $f) {
             $stock = $repo->lockInventory($b->flight_id);
             $b = $repo->locked($b->id);
-            abort_unless($b->status === 'CHECKED_IN', 409, 'Chỉ đổi ghế khi đã check-in và chưa boarding.');
-            abort_unless(SeatMap::contains($d['seat'], $stock->capacity), 422, 'Ghế không hợp lệ.');
+            abort_unless($b->status === 'CHECKED_IN', 409, 'Chỉ đổi ghế sau khi check-in và trước khi lên tàu.');
+            abort_unless(SeatMap::contains($d['seat'], $stock->capacity, $stock->seat_layout ?? null, $b->fare_class), 422, 'Ghế không hợp lệ hoặc không thuộc khoang của hạng vé.');
             abort_if(DB::table('bookings')->where('flight_id', $b->flight_id)->where('id', '!=', $b->id)->where('seat', $d['seat'])->exists(), 409, 'Ghế đã có người.');
             $token = bin2hex(random_bytes(32));
             DB::table('bookings')->where('id', $b->id)->update(['seat' => $d['seat'], 'updated_at' => now()]);
@@ -48,13 +48,13 @@ class PassengerChanges
         $b = DB::table('bookings')->find($d['booking_id']) ?? abort(404);
         $f = app(FlightCatalog::class)->get($b->flight_id);
         Access::airport($u, $f->origin);
-        abort_unless(in_array($f->status, ['BOARDING', 'GATE_CLOSED']), 409, 'Chỉ xử lý no-show/offload trước khởi hành.');
+        abort_unless(in_array($f->status, ['BOARDING', 'GATE_CLOSED']), 409, 'Chỉ xử lý trường hợp không đến hoặc không lên tàu trước giờ khởi hành.');
 
         return DB::transaction(function () use ($u, $b, $d, $f) {
             $repo = app(CommerceRepository::class);
             $repo->lockInventory($b->flight_id);
             $b = $repo->locked($b->id);
-            abort_unless(in_array($b->status, ['CONFIRMED', 'CHECKED_IN']), 409, 'Không thể xử lý khách đã boarding hoặc vé không hiệu lực.');
+            abort_unless(in_array($b->status, ['CONFIRMED', 'CHECKED_IN']), 409, 'Không thể xử lý hành khách đã lên tàu hoặc vé không còn hiệu lực.');
             DB::table('bookings')->where('id', $b->id)->update(['status' => 'NO_SHOW', 'seat' => null, 'updated_at' => now()]);
             DB::table('boarding_passes')->where('booking_id', $b->id)->update(['revoked_at' => now()]);
             foreach (DB::table('baggage')->where('booking_id', $b->id)->whereNotIn('status', ['OFFLOADED', 'DELIVERED'])->lockForUpdate()->get() as $bag) {
@@ -62,7 +62,7 @@ class PassengerChanges
                 DB::table('baggage_events')->insert(['id' => (string) Str::uuid(), 'baggage_id' => $bag->id, 'status' => 'OFFLOADED', 'location' => $f->origin, 'custody' => $bag->custody, 'actor_id' => $u->id, 'created_at' => now()]);
             }
             Audit::record('boarding.no_show', $b->id, $b->status, $d['reason'], $u->id);
-            Events::notify($b->user_id, 'Trạng thái phục vụ chuyến', 'Nhân viên ghi nhận no-show/offload: '.$d['reason']);
+            Events::notify($b->user_id, 'Trạng thái phục vụ chuyến', 'Nhân viên ghi nhận hành khách không đến hoặc không lên tàu: '.$d['reason']);
 
             return (object) ['id' => $b->id, 'status' => 'NO_SHOW'];
         }, 3);

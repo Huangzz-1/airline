@@ -2,6 +2,8 @@
 
 Laravel 12/PHP 8.4, Blade/Bootstrap 5. Modular Monolith: controller/validation → domain service → query repository/connection. Không microservices giả tạo, không FK/join xuyên instance. Query local sử dụng builder/parameter binding.
 
+Phần mở rộng PNR bổ sung header `reservations`, danh sách khách và các chặng ở DB2, liên kết vào các booking một-khách/một-chặng hiện có. Các inventory được khóa theo ID tăng dần và giữ toàn hành trình trong một transaction. Checkout chung ghi tổng tiền và các phần phân bổ vào một intent DB3; kết quả ghi từng payment/ledger trong cùng transaction tài chính rồi phát sự kiện xuất từng vé. Sơ đồ cabin lưu ở aircraft DB1 và snapshot ở inventory/receipt DB2, được kiểm tra trong hold/check-in/đổi ghế/thay tàu. Xem [chi tiết thiết kế và quy tắc](reservations-and-cabins.md).
+
 ```mermaid
 flowchart LR
  UI[Public / Passenger / Staff / Admin] --> HTTP[Auth + CSRF + RBAC + Controllers]

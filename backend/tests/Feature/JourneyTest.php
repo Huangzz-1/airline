@@ -64,7 +64,7 @@ class JourneyTest extends TestCase
         $this->postJson('/api/v1/bookings', ['flight_id' => 1, 'idempotency_key' => 'unverified-key'])->assertForbidden();
         Notification::assertSentTo($u, VerifyEmail::class);
         $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(30), ['id' => $u->id, 'hash' => sha1($u->email)]);
-        $this->get($url)->assertRedirect('/journeys');
+        $this->get($url)->assertRedirect('/home');
         $this->assertNotNull($u->fresh()->email_verified_at);
     }
 
@@ -243,7 +243,7 @@ class JourneyTest extends TestCase
         $data = ['email' => $u->email, 'token' => $token, 'password' => 'NewPassword2026!', 'password_confirmation' => 'NewPassword2026!'];
         $this->post('/reset-password', $data)->assertRedirect('/login');
         $this->post('/reset-password', $data)->assertSessionHasErrors('email');
-        $this->post('/login', ['email' => $u->email, 'password' => 'NewPassword2026!'])->assertRedirect('/journeys');
+        $this->post('/login', ['email' => $u->email, 'password' => 'NewPassword2026!'])->assertRedirect('/home');
         $this->assertAuthenticatedAs($u);
         $this->post('/logout')->assertRedirect('/');
         $this->assertGuest();

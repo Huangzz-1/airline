@@ -75,8 +75,8 @@ class PaymentController extends Controller
     {
         $r->validate(['vnp_TxnRef' => 'nullable|uuid', 'orderId' => 'nullable|uuid']);
         $intent = $provider === 'vnpay' ? $r->query('vnp_TxnRef') : $r->query('orderId');
-        $s = DB::table('checkout_sessions as c')->join('bookings as b', 'b.id', '=', 'c.booking_id')->where('c.intent_id', $intent)->where('b.user_id', $r->user()->id)->select('b.id')->first() ?? abort(404);
+        $s = DB::table('checkout_sessions as c')->join('bookings as b', 'b.id', '=', 'c.booking_id')->where('c.intent_id', $intent)->where('b.user_id', $r->user()->id)->select('b.id', 'b.reservation_id', 'b.reservation_initial')->first() ?? abort(404);
 
-        return redirect('/journeys/'.$s->id)->with('message', 'Đang kiểm tra kết quả thanh toán. Vé được xuất sau khi có xác nhận từ cổng thanh toán.');
+        return redirect($s->reservation_initial && $s->reservation_id ? '/reservations/'.$s->reservation_id : '/journeys/'.$s->id)->with('message', 'Đang kiểm tra kết quả thanh toán. Vé được xuất sau khi có xác nhận từ cổng thanh toán.');
     }
 }

@@ -99,6 +99,7 @@ const initFlightRanges = (root) => {
         activeSide = handle?.dataset.rangeHandle || chooseSide(value);
       }
       pointerId = event.pointerId;
+      group.dataset.rangeDragging = 'true';
       dual.setPointerCapture?.(pointerId);
       if (activeSide !== 'both') setValue(activeSide, value);
       event.preventDefault();
@@ -124,6 +125,11 @@ const initFlightRanges = (root) => {
       if (event.pointerId === pointerId) {
         activeSide = null;
         pointerId = null;
+        delete group.dataset.rangeDragging;
+        // Trigger one refresh after the drag completes. Input events emitted
+        // during pointer movement are intentionally ignored by the search
+        // handler so the result cards are not replaced mid-drag.
+        lower.dispatchEvent(new Event('input', { bubbles: true }));
       }
     };
     dual.addEventListener('pointerup', releasePointer);
@@ -308,7 +314,10 @@ document.querySelectorAll('[data-flight-search]').forEach((form) => {
     }
     if (event.target.form === form) schedule();
   };
-  const handleInput = (event) => { if (event.target.form === form && !event.target.matches('select, [type=checkbox]')) schedule(); };
+  const handleInput = (event) => {
+    if (event.target.form === form && !event.target.matches('select, [type=checkbox]')
+      && !event.target.closest('[data-flight-range][data-range-dragging]')) schedule();
+  };
   form.addEventListener('change', handleChange);
   form.addEventListener('input', handleInput);
   results?.addEventListener('change', handleChange);

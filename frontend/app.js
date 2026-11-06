@@ -129,7 +129,16 @@ const initFlightRanges = (root) => {
     dual.addEventListener('pointerup', releasePointer);
     dual.addEventListener('pointercancel', releasePointer);
     for (const side of ['min', 'max']) {
-      inputs[side].addEventListener('input', updateVisual);
+      inputs[side].addEventListener('input', () => {
+        // Native input events (and browser automation) can change a bound
+        // directly, bypassing setValue(). Keep the interval valid before the
+        // search request serializes both values.
+        if (Number(lower.value) > Number(upper.value)) {
+          if (side === 'min') upper.value = lower.value;
+          else lower.value = upper.value;
+        }
+        updateVisual();
+      });
       handles[side].addEventListener('keydown', (event) => {
         const input = inputs[side];
         const step = Number(input.step) || 1;

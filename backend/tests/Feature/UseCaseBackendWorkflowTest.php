@@ -132,4 +132,31 @@ class UseCaseBackendWorkflowTest extends TestCase
         ])->assertOk();
         $this->assertDatabaseHas('passenger_assistance_requests', ['reservation_id' => $reservation, 'status' => 'OPEN']);
     }
+
+    public function test_analytics_dataset_cleaning_training_and_evaluation_pipeline(): void
+    {
+        $analyst = $this->user('analyst');
+        $dataset = $this->actingAs($analyst)->postJson('/api/v1/actions/dataset', [
+            'code' => 'OPS_EVENTS_PIPELINE', 'name' => 'Operational event history', 'source' => 'flight_actual_events',
+        ])->assertOk()->json('id');
+
+        $this->actingAs($analyst)->postJson('/api/v1/actions/dataset_clean', [
+            'dataset_id' => $dataset,
+            'records' => [
+                ['event_key' => 'evt-1', 'flight_id' => 1, 'event_time' => now()->subHour()->toIso8601String(), 'delay_minutes' => 12],
+                ['event_key' => 'evt-2', 'flight_id' => 1, 'event_time' => now()->subMinutes(30)->toIso8601String(), 'delay_minutes' => 4],
+                ['event_key' => 'evt-invalid', 'flight_id' => 999999, 'event_time' => now()->toIso8601String(), 'delay_minutes' => 2],
+            ],
+        ])->assertOk()->assertJsonPath('valid', 2)->assertJsonPath('rejected', 1);
+
+        $run = $this->actingAs($analyst)->postJson('/api/v1/actions/model_run', [
+            'dataset_id' => $dataset, 'model_type' => 'delay-baseline', 'train_ratio' => 0.5,
+        ])->assertOk()->json('id');
+        $this->actingAs($analyst)->postJson('/api/v1/actions/model_train', [
+            'model_run_id' => $run, 'target_field' => 'delay_minutes',
+        ])->assertOk()->assertJsonPath('status', 'COMPLETED');
+        $this->actingAs($analyst)->postJson('/api/v1/actions/model_evaluate', ['model_run_id' => $run])->assertOk();
+        $this->assertDatabaseHas('analytics_model_runs', ['id' => $run, 'status' => 'COMPLETED']);
+        $this->assertDatabaseHas('analytics_dataset_records', ['dataset_id' => $dataset, 'status' => 'REJECTED']);
+    }
 }

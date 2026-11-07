@@ -33,7 +33,7 @@ class UseCaseService
             'assistance' => 'assistance', 'actual_time' => 'actualTime', 'fee_catalog' => 'feeCatalog',
             'reconciliation_reason' => 'reconciliationReason', 'reconciliation_adjustment' => 'reconciliationAdjustment',
             'reconciliation_adjustment_decide' => 'reconciliationAdjustmentDecide', 'reconciliation_import' => 'reconciliationImport',
-            'dataset' => 'dataset', 'model_run' => 'modelRun', 'recommendation' => 'recommendation',
+            'dataset' => 'dataset', 'dataset_clean' => 'datasetClean', 'model_run' => 'modelRun', 'model_train' => 'modelTrain', 'model_evaluate' => 'modelEvaluate', 'recommendation' => 'recommendation',
             'support_compensation' => 'supportCompensation', 'support_compensation_decide' => 'supportCompensationDecide', 'notification_delivery_update' => 'notificationDeliveryUpdate',
         ];
         abort_unless(isset($handlers[$action]), 404, 'Thao tác không được hỗ trợ.');
@@ -288,9 +288,89 @@ class UseCaseService
         Access::role($u, 'analyst', 'data_admin', 'admin'); $d = $this->validate($input, ['code' => 'required|string|max:80', 'name' => 'required|string|max:160', 'source' => 'required|string|max:80', 'schema_definition' => 'nullable|array', 'status' => 'sometimes|in:DRAFT,READY,ARCHIVED']); $d['status'] = $d['status'] ?? 'DRAFT'; if (isset($d['schema_definition'])) $d['schema_definition'] = json_encode($d['schema_definition'], JSON_THROW_ON_ERROR); $db = DB::table('analytics_datasets'); abort_if($db->where('code', $d['code'])->exists(), 409); $id = $db->insertGetId($d + ['created_by' => $u->id, 'created_at' => now(), 'updated_at' => now()]); $this->audit('analytics.dataset.created', $id, $u, null, $d['code']); return $this->result($id, $d['status']);
     }
 
+    private function datasetClean(User $u, array $input): object
+    {
+        Access::role($u, 'analyst', 'data_admin', 'admin');
+        $d = $this->validate($input, [
+            'dataset_id' => 'required|integer',
+            'records' => 'required|array|min:1|max:10000',
+            'records.*' => 'required|array',
+            'records.*.event_key' => 'required|string|max:120',
+            'records.*.flight_id' => 'required|integer|min:1',
+            'records.*.event_time' => 'required|date',
+            'records.*.delay_minutes' => 'nullable|numeric|between:-1440,1440',
+        ]);
+        $db = DB::table('analytics_dataset_records');
+        abort_unless(DB::table('analytics_datasets')->where('id', $d['dataset_id'])->exists(), 422, 'Nguồn dữ liệu không tồn tại.');
+        $valid = 0;
+        $rejected = 0;
+        foreach ($d['records'] as $record) {
+            $payload = $record;
+            $errors = [];
+            if (! DB::connection('ops')->table('flights')->where('id', $record['flight_id'])->exists()) {
+                $errors[] = 'flight_not_found';
+            }
+            try {
+                $payload['event_time'] = \Carbon\Carbon::parse($record['event_time'])->utc()->format('Y-m-d H:i:s');
+            } catch (\Throwable) {
+                $errors[] = 'invalid_event_time';
+            }
+            $status = $errors ? 'REJECTED' : 'VALID';
+            $status === 'VALID' ? $valid++ : $rejected++;
+            $db->updateOrInsert(
+                ['dataset_id' => $d['dataset_id'], 'event_key' => $record['event_key']],
+                ['payload' => json_encode($payload, JSON_THROW_ON_ERROR), 'status' => $status, 'quality_errors' => $errors ? implode(',', $errors) : null, 'cleaned_at' => now(), 'updated_at' => now(), 'created_at' => now()]
+            );
+        }
+        DB::table('analytics_datasets')->where('id', $d['dataset_id'])->update(['status' => $valid ? 'READY' : 'DRAFT', 'updated_at' => now()]);
+        $this->audit('analytics.dataset.cleaned', $d['dataset_id'], $u, null, json_encode(['valid' => $valid, 'rejected' => $rejected], JSON_THROW_ON_ERROR));
+
+        return $this->result($d['dataset_id'], $valid ? 'READY' : 'DRAFT', ['valid' => $valid, 'rejected' => $rejected, 'total' => count($d['records'])]);
+    }
+
     private function modelRun(User $u, array $input): object
     {
         Access::role($u, 'analyst', 'data_admin', 'admin'); $d = $this->validate($input, ['dataset_id' => 'required|integer', 'model_type' => 'required|string|max:60', 'train_ratio' => 'sometimes|numeric|between:0.5,0.95', 'metrics' => 'nullable|array', 'artifact_ref' => 'nullable|string|max:255', 'status' => 'sometimes|in:QUEUED,RUNNING,COMPLETED,FAILED']); abort_unless(DB::table('analytics_datasets')->where('id', $d['dataset_id'])->exists(), 422); $d['train_ratio'] = $d['train_ratio'] ?? 0.8; $d['status'] = $d['status'] ?? 'QUEUED'; if (isset($d['metrics'])) $d['metrics'] = json_encode($d['metrics'], JSON_THROW_ON_ERROR); $id = DB::table('analytics_model_runs')->insertGetId($d + ['created_by' => $u->id, 'created_at' => now(), 'updated_at' => now()]); $this->audit('analytics.model_run.created', $id, $u, null, $d['status']); return $this->result($id, $d['status']);
+    }
+
+    private function modelTrain(User $u, array $input): object
+    {
+        Access::role($u, 'analyst', 'data_admin', 'admin');
+        $d = $this->validate($input, ['model_run_id' => 'required|integer', 'target_field' => 'sometimes|string|max:60']);
+        $db = DB::table('analytics_model_runs');
+        $run = $db->where('id', $d['model_run_id'])->lockForUpdate()->first() ?? abort(404);
+        $rows = DB::table('analytics_dataset_records')->where('dataset_id', $run->dataset_id)->where('status', 'VALID')->get();
+        abort_unless($rows->count() >= 2, 422, 'Cần ít nhất hai bản ghi hợp lệ để huấn luyện.');
+        $ratio = (float) $run->train_ratio;
+        $trainCount = max(1, (int) floor($rows->count() * $ratio));
+        $testCount = $rows->count() - $trainCount;
+        $values = $rows->map(function ($row) use ($d) {
+            $payload = json_decode($row->payload, true) ?: [];
+            return is_numeric($payload[$d['target_field'] ?? 'delay_minutes'] ?? null) ? (float) $payload[$d['target_field'] ?? 'delay_minutes'] : null;
+        })->filter(fn ($value) => $value !== null)->values();
+        abort_unless($values->isNotEmpty(), 422, 'Không tìm thấy trường mục tiêu số trong dữ liệu sạch.');
+        $mean = $values->avg();
+        $mae = $values->avg(fn ($value) => abs($value - $mean));
+        $metrics = ['algorithm' => 'mean-baseline-v1', 'target_field' => $d['target_field'] ?? 'delay_minutes', 'train_count' => $trainCount, 'test_count' => $testCount, 'mae' => round($mae, 4), 'rmse' => round(sqrt($values->avg(fn ($value) => ($value - $mean) ** 2)), 4), 'trained_at' => now()->toIso8601String()];
+        $db->where('id', $run->id)->update(['status' => 'COMPLETED', 'metrics' => json_encode($metrics, JSON_THROW_ON_ERROR), 'artifact_ref' => 'analytics://model-run/'.$run->id, 'updated_at' => now()]);
+        $this->audit('analytics.model_run.trained', $run->id, $u, $run->status, json_encode($metrics, JSON_THROW_ON_ERROR));
+
+        return $this->result($run->id, 'COMPLETED', ['metrics' => $metrics]);
+    }
+
+    private function modelEvaluate(User $u, array $input): object
+    {
+        Access::role($u, 'analyst', 'data_admin', 'admin');
+        $d = $this->validate($input, ['model_run_id' => 'required|integer']);
+        $run = DB::table('analytics_model_runs')->where('id', $d['model_run_id'])->first() ?? abort(404);
+        abort_unless($run->status === 'COMPLETED', 409, 'Mô hình chưa được huấn luyện.');
+        $metrics = json_decode($run->metrics ?: '{}', true) ?: [];
+        $metrics['evaluated_at'] = now()->toIso8601String();
+        $metrics['quality_status'] = (($metrics['mae'] ?? 999) <= 15) ? 'PASS' : 'REVIEW';
+        DB::table('analytics_model_runs')->where('id', $run->id)->update(['metrics' => json_encode($metrics, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+        $this->audit('analytics.model_run.evaluated', $run->id, $u, null, json_encode($metrics, JSON_THROW_ON_ERROR));
+
+        return $this->result($run->id, $metrics['quality_status'], ['metrics' => $metrics]);
     }
 
     private function recommendation(User $u, array $input): object

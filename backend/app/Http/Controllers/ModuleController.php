@@ -35,7 +35,7 @@ class ModuleController extends Controller
             'document_verify', 'assistance', 'ancillary', 'ancillary_decide',
             'support', 'support_followup', 'support_reply', 'change_seat',
         ],
-        'm3' => ['device', 'telemetry', 'forecast', 'dataset', 'model_run', 'recommendation'],
+        'm3' => ['device', 'telemetry', 'forecast', 'dataset', 'dataset_clean', 'model_run', 'model_train', 'model_evaluate', 'recommendation'],
     ];
 
     public function index(Request $request, string $module)

@@ -322,8 +322,8 @@ class WorkspaceController extends Controller
                 }
             }
         }
-        $arrayActions = ['master_propose', 'airport_update', 'season_rule', 'airport_area', 'aircraft_model', 'fare_rule_version', 'baggage_allowance', 'ancillary', 'notification_template', 'customer_interaction', 'system_config', 'dataset', 'model_run', 'recommendation', 'fee_catalog', 'integration_connection'];
-        $arrayKeys = ['changes', 'weekdays', 'cabin_layout', 'rules', 'metadata', 'operating_hours', 'conditions', 'schema_definition', 'metrics', 'explanation', 'configuration'];
+        $arrayActions = ['master_propose', 'airport_update', 'season_rule', 'airport_area', 'aircraft_model', 'fare_rule_version', 'baggage_allowance', 'ancillary', 'notification_template', 'customer_interaction', 'system_config', 'dataset', 'dataset_clean', 'model_run', 'model_train', 'model_evaluate', 'recommendation', 'fee_catalog', 'integration_connection'];
+        $arrayKeys = ['changes', 'weekdays', 'cabin_layout', 'rules', 'metadata', 'operating_hours', 'conditions', 'schema_definition', 'records', 'metrics', 'explanation', 'configuration'];
         foreach ($d as $key => $value) {
             abort_if(! is_scalar($value) && $value !== null && ! (in_array($action, $arrayActions, true) && in_array($key, $arrayKeys, true)), 422, 'D? li?u kh?ng h?p l?.');
         }
@@ -332,6 +332,13 @@ class WorkspaceController extends Controller
                 $d['changes'] = json_decode($d['changes_json'], true, 32, JSON_THROW_ON_ERROR);
             } catch (\JsonException) {
                 abort(422, 'JSON thay đổi không hợp lệ.');
+            }
+        }
+        if ($action === 'dataset_clean' && isset($d['records']) && is_string($d['records'])) {
+            try {
+                $d['records'] = json_decode($d['records'], true, 32, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                abort(422, 'JSON bản ghi dữ liệu không hợp lệ.');
             }
         }
         foreach (['departure', 'arrival', 'due_at', 'starts_at', 'ends_at', 'event_time'] as $key) {
@@ -372,7 +379,7 @@ class WorkspaceController extends Controller
             'baggage_allowance', 'ancillary', 'ancillary_decide', 'baggage_incident', 'baggage_incident_resolve', 'notification_template', 'notification_send', 'notification_delivery_update', 'customer_interaction',
             'system_config', 'document_verify', 'assistance', 'actual_time', 'fee_catalog', 'reconciliation_reason',
             'reconciliation_adjustment', 'reconciliation_adjustment_decide', 'reconciliation_import', 'dataset', 'model_run',
-            'recommendation', 'support_compensation', 'support_compensation_decide' => app(UseCaseService::class)->execute($u, $action, $d),
+            'recommendation', 'support_compensation', 'support_compensation_decide', 'dataset_clean', 'model_train', 'model_evaluate' => app(UseCaseService::class)->execute($u, $action, $d),
             default => app(OperationsService::class)->execute($u, $action, $d),
         };
         if (in_array($action, ['publish', 'publish_batch', 'flight_state', 'allocate', 'approve_disruption', 'refund_request', 'refund_decide', 'exchange_decide', 'resource_decide'])) {

@@ -12,10 +12,6 @@ final class Access
 
     public static function allows(User $u, string ...$roles): bool
     {
-        if ($u->role === 'admin') {
-            return ! $roles || count(array_filter($roles, fn (string $role) => $role !== 'passenger')) > 0;
-        }
-
         return in_array($u->role, $roles, true);
     }
 

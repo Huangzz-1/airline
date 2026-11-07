@@ -1,6 +1,11 @@
 @php
     $isStaff = auth()->check() && auth()->user()->role !== 'passenger';
     $workspaceSections = $isStaff ? \App\Http\Controllers\WorkspaceController::sections() : [];
+    $staffModules = [
+        'm1' => ['Quản lý cốt lõi', ['admin', 'data_admin', 'operations', 'ops_manager', 'fleet_manager', 'maintenance', 'crew_scheduler', 'ground_agent', 'integration_admin']],
+        'm2' => ['Hành khách & booking', ['admin', 'airport_agent', 'customer_service', 'operations']],
+        'm3' => ['Phân tích AI & IoT', ['admin', 'analyst', 'data_admin', 'operations', 'ops_manager', 'maintenance', 'integration_admin']],
+    ];
 @endphp
 <!doctype html>
 <html lang="vi">
@@ -27,27 +32,20 @@
             <div class="sidebar-context"><span class="sidebar-context-label">Không gian làm việc</span><strong>{{ auth()->user()->airport_code ?: 'Toàn hệ thống' }}</strong></div>
             <nav class="sidebar-nav">
                 <a class="sidebar-link {{ request()->is('staff') ? 'active' : '' }}" href="/staff"><span class="sidebar-icon" aria-hidden="true">⌂</span><span>Tổng quan</span></a>
-                @if(in_array(auth()->user()->role, ['admin','data_admin','operations','ops_manager','fleet_manager','maintenance','crew_scheduler','ground_agent','integration_admin'], true))
-                    <a class="sidebar-link {{ request()->is('modules/m1') ? 'active' : '' }}" href="/modules/m1"><span class="sidebar-icon" aria-hidden="true">⌘</span><span>Quản lý cốt lõi</span></a>
-                @endif
-                @if(in_array(auth()->user()->role, ['admin','airport_agent','customer_service','operations'], true))
-                    <a class="sidebar-link {{ request()->is('modules/m2') ? 'active' : '' }}" href="/modules/m2"><span class="sidebar-icon" aria-hidden="true">◉</span><span>Hành khách & booking</span></a>
-                @endif
-                @if(in_array(auth()->user()->role, ['admin','analyst','data_admin','operations','ops_manager','maintenance','integration_admin'], true))
-                    <a class="sidebar-link {{ request()->is('modules/m3') ? 'active' : '' }}" href="/modules/m3"><span class="sidebar-icon" aria-hidden="true">◌</span><span>Phân tích & thiết bị</span></a>
-                @endif
-                @if(auth()->user()->role === 'airport_agent')
-                    <a class="sidebar-link {{ request()->is('staff/passengers') ? 'active' : '' }}" href="/staff/passengers"><span class="sidebar-icon" aria-hidden="true">◉</span><span>Phục vụ hành khách</span></a>
-                @endif
-                @foreach($workspaceSections as $key => [$label, $roles])
-                    @if(in_array(auth()->user()->role, $roles, true))
-                        <a class="sidebar-link {{ request()->is('workspace/'.$key) ? 'active' : '' }}" href="/workspace/{{ $key }}"><span class="sidebar-icon" aria-hidden="true">{{ ['scheduling'=>'◫','fleet'=>'▣','maintenance'=>'⚙','crew'=>'♙','ground'=>'⌁','baggage'=>'▤','finance'=>'₫','customer'=>'◌','recovery'=>'↗','disruptions'=>'!','catalog'=>'⌗','boarding-control'=>'✓'][$key] ?? '•' }}</span><span>{{ $label }}</span></a>
-                    @endif
+                @foreach($staffModules as $module => [$moduleLabel, $moduleRoles])
+                    @php($moduleAllowed = \App\Modules\Shared\Access::allows(auth()->user(), ...$moduleRoles))
+                    <a class="sidebar-link {{ request()->is('modules/'.$module) ? 'active' : '' }} {{ $moduleAllowed ? '' : 'is-locked' }}" href="/modules/{{ $module }}" @if(!$moduleAllowed) aria-label="{{ $moduleLabel }} — Không đủ thẩm quyền" @endif><span class="sidebar-icon" aria-hidden="true">•</span><span>{{ $moduleLabel }}</span>@if(!$moduleAllowed)<small aria-hidden="true">🔒</small>@endif</a>
                 @endforeach
-                @if(auth()->user()->role === 'admin')
-                    <div class="sidebar-divider"></div>
-                    <a class="sidebar-link {{ request()->is('admin/connections') ? 'active' : '' }}" href="/admin/connections"><span class="sidebar-icon" aria-hidden="true">⚡</span><span>Email & thanh toán</span></a>
-                @endif
+                @php($passengerDeskAllowed = \App\Modules\Shared\Access::allows(auth()->user(), 'airport_agent'))
+                <a class="sidebar-link {{ request()->is('staff/passengers') ? 'active' : '' }} {{ $passengerDeskAllowed ? '' : 'is-locked' }}" href="/staff/passengers" @if(!$passengerDeskAllowed) aria-label="Phục vụ hành khách — Không đủ thẩm quyền" @endif><span class="sidebar-icon" aria-hidden="true">•</span><span>Phục vụ hành khách</span>@if(!$passengerDeskAllowed)<small aria-hidden="true">🔒</small>@endif</a>
+                @foreach($workspaceSections as $key => [$label, $roles])
+                    @php($allowed = \App\Modules\Shared\Access::allows(auth()->user(), ...$roles))
+                    <a class="sidebar-link {{ request()->is('workspace/'.$key) ? 'active' : '' }} {{ $allowed ? '' : 'is-locked' }}" href="/workspace/{{ $key }}" @if(!$allowed) aria-label="{{ $label }} — Không đủ thẩm quyền" @endif><span class="sidebar-icon" aria-hidden="true">•</span><span>{{ $label }}</span>@if(!$allowed)<small aria-hidden="true">🔒</small>@endif</a>
+                @endforeach
+                @php($adminAllowed = auth()->user()->role === 'admin')
+                <div class="sidebar-divider"></div>
+                <a class="sidebar-link {{ request()->is('admin/users') ? 'active' : '' }} {{ $adminAllowed ? '' : 'is-locked' }}" href="/admin/users" aria-label="Quản lý tài khoản — {{ $adminAllowed ? 'Được phép' : 'Không đủ thẩm quyền' }}"><span class="sidebar-icon" aria-hidden="true">•</span><span>Quản lý tài khoản</span>@if(!$adminAllowed)<small aria-hidden="true">🔒</small>@endif</a>
+                <a class="sidebar-link {{ request()->is('admin/connections') ? 'active' : '' }} {{ $adminAllowed ? '' : 'is-locked' }}" href="/admin/connections" aria-label="Email & thanh toán — {{ $adminAllowed ? 'Được phép' : 'Không đủ thẩm quyền' }}"><span class="sidebar-icon" aria-hidden="true">•</span><span>Email & thanh toán</span>@if(!$adminAllowed)<small aria-hidden="true">🔒</small>@endif</a>
             </nav>
             <div class="sidebar-footer">
                 <a class="sidebar-user" href="/profile"><span class="avatar avatar-sm">{{ mb_strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}</span><span class="sidebar-user-copy"><strong>{{ auth()->user()->name }}</strong><small>{{ \App\Support\Ui::role(auth()->user()->role) }}</small></span><span aria-hidden="true">›</span></a>
@@ -76,7 +74,7 @@
                 @if(!$isStaff)
                     <nav class="module-nav passenger-module-nav" aria-label="Điều hướng tài khoản"><a class="{{ request()->is('journeys*') ? 'active' : '' }}" href="/journeys">Hành trình của tôi</a><a class="{{ request()->is('modules/m2') ? 'active' : '' }}" href="/modules/m2">Booking & hành lý</a><a class="{{ request()->is('workspace/notifications') ? 'active' : '' }}" href="/workspace/notifications">Thông báo</a><a class="{{ request()->is('workspace/customer') ? 'active' : '' }}" href="/workspace/customer">Hỗ trợ</a><a class="{{ request()->is('profile') ? 'active' : '' }}" href="/profile">Hồ sơ</a></nav>
                 @else
-                    <nav class="module-nav contextual-nav" aria-label="Phân hệ nghiệp vụ">@if(auth()->user()->role === 'admin')<a href="/admin/connections">Email & thanh toán</a>@endif<a href="/staff" class="{{ request()->is('staff') ? 'active' : '' }}">Tổng quan</a>@if(auth()->user()->role === 'airport_agent')<a href="/staff/passengers" class="{{ request()->is('staff/passengers') ? 'active' : '' }}">Phục vụ hành khách</a>@endif @foreach($workspaceSections as $key => [$label, $roles])@if(in_array(auth()->user()->role, $roles, true))<a class="{{ request()->is('workspace/'.$key) ? 'active' : '' }}" href="/workspace/{{ $key }}">{{ $label }}</a>@endif @endforeach</nav>
+                    <nav class="module-nav contextual-nav" aria-label="Phân hệ nghiệp vụ"><a href="/staff" class="{{ request()->is('staff') ? 'active' : '' }}">Tổng quan</a><a href="/admin/users" class="{{ request()->is('admin/users') ? 'active' : '' }} {{ auth()->user()->role === 'admin' ? '' : 'is-locked' }}" aria-label="Quản lý tài khoản — {{ auth()->user()->role === 'admin' ? 'Được phép' : 'Không đủ thẩm quyền' }}">Quản lý tài khoản</a>@foreach($workspaceSections as $key => [$label, $roles])<a class="{{ request()->is('workspace/'.$key) ? 'active' : '' }}" href="/workspace/{{ $key }}">{{ $label }}</a>@endforeach</nav>
                 @endif
             @endauth
             <div class="global-feedback" aria-live="polite">

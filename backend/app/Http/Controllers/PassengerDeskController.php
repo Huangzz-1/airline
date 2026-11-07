@@ -15,7 +15,11 @@ class PassengerDeskController extends Controller
     {
         Access::role($r->user(), 'airport_agent');
         $d = $r->validate(['q' => 'nullable|string|max:100']);
-        $flights = DB::connection('ops')->table('flights')->where('origin', $r->user()->airport_code)->where('departure', '>', now()->subHours(12))->whereNotIn('status', ['DRAFT', 'PENDING'])->get()->keyBy('id');
+        $flightQuery = DB::connection('ops')->table('flights')->where('departure', '>', now()->subHours(12))->whereNotIn('status', ['DRAFT', 'PENDING']);
+        if (! Access::isAdmin($r->user())) {
+            $flightQuery->where('origin', $r->user()->airport_code);
+        }
+        $flights = $flightQuery->get()->keyBy('id');
         $q = DB::table('bookings as b')->join('users as u', 'u.id', '=', 'b.user_id')->leftJoin('reservation_passengers as p', 'p.id', '=', 'b.passenger_id')->leftJoin('reservations as r', 'r.id', '=', 'b.reservation_id')->whereIn('b.flight_id', $flights->keys())->select('b.*')->selectRaw('COALESCE(p.name, u.name) AS passenger_name');
         $q->where(function ($q) use ($d) {
             if (empty($d['q'])) {
@@ -45,7 +49,7 @@ class PassengerDeskController extends Controller
         $d = $r->validate(['seat' => 'required|string|max:4']);
         $b = DB::table('bookings')->find($id) ?? abort(404);
         $f = $catalog->get($b->flight_id);
-        abort_unless($f->origin === $r->user()->airport_code, 404);
+        abort_unless(Access::isAdmin($r->user()) || $f->origin === $r->user()->airport_code, 404);
         $service->checkin($b->id, $b->user_id, $d['seat'], $r->user()->id);
 
         return back()->with('message', 'Đã làm thủ tục cho mã đặt chỗ '.$b->reference.'. Có thể in thẻ lên tàu.');

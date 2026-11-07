@@ -195,33 +195,32 @@ class PortalController extends Controller
 
     public function staff(Request $r)
     {
-        $user = $r->user();
-        if (! in_array($user->role, ['admin', 'finance', 'airport_agent'])) {
-            return view('staff-dashboard', app(StaffDashboard::class)->data($user));
-        }
-        if ($user->role === 'admin') {
+        $data = app(StaffDashboard::class)->data($r->user());
+        if ($r->user()->role === 'admin') {
             $d = $r->validate(['q' => 'nullable|string|max:100']);
-            $users = User::query()->when($d['q'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$term.'%')->orWhere('email', 'like', '%'.$term.'%')))->orderBy('id')->paginate(15)->withQueryString();
-
-            return view('admin', ['users' => $users, 'airports' => DB::connection('ops')->table('airports')->get(), 'logs' => DB::table('audit_logs')->latest('id')->limit(20)->get()]);
+            $data['users'] = User::query()
+                ->when($d['q'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$term.'%')->orWhere('email', 'like', '%'.$term.'%')))
+                ->orderBy('id')->paginate(15)->withQueryString();
+            $data['airports'] = DB::connection('ops')->table('airports')->get();
         }
-        if ($user->role === 'finance') {
+        if (in_array($r->user()->role, ['finance', 'admin'], true)) {
             $payments = DB::connection('finance')->table('payments')->latest()->paginate(15);
             $bookings = DB::table('bookings')->whereIn('id', $payments->pluck('booking_id'))->get()->keyBy('id');
             $tickets = DB::table('tickets')->whereIn('booking_id', $payments->pluck('booking_id'))->pluck('booking_id')->all();
             foreach ($payments as $payment) {
-                $b = $bookings[$payment->booking_id] ?? null;
-                $payment->reference = $b?->reference ?? '—';
-                $payment->matched = $payment->status === 'CAPTURED' && $b && (int) $b->amount === (int) $payment->amount && in_array($payment->booking_id, $tickets);
+                $booking = $bookings[$payment->booking_id] ?? null;
+                $payment->reference = $booking?->reference ?? '—';
+                $payment->matched = $payment->status === 'CAPTURED' && $booking && (int) $booking->amount === (int) $payment->amount && in_array($payment->booking_id, $tickets);
             }
-
-            return view('finance', ['payments' => $payments] + app(StaffDashboard::class)->data($user));
+            $data['payments'] = $payments;
+            $data['financeKpis'] = [
+                'Yêu cầu hoàn chờ duyệt' => DB::connection('finance')->table('refunds')->where('status', 'REQUESTED')->count(),
+                'Yêu cầu đổi chờ duyệt' => DB::table('exchange_requests')->where('status', 'PENDING')->count(),
+                'Kỳ chưa khóa' => DB::connection('finance')->table('reconciliation_runs')->where('status', 'OPEN')->count(),
+            ];
         }
-        $flights = DB::connection('ops')->table('flights')->where('origin', $user->airport_code)->where('departure', '>', now())->orderBy('departure')->get();
-        $ids = $flights->pluck('id');
-        $manifest = DB::table('bookings as b')->join('users as u', 'u.id', '=', 'b.user_id')->leftJoin('reservation_passengers as p', 'p.id', '=', 'b.passenger_id')->whereIn('flight_id', $ids)->whereIn('b.status', ['CONFIRMED', 'CHECKED_IN', 'BOARDED'])->select('b.reference', 'b.flight_id', 'b.seat', 'b.status')->selectRaw('COALESCE(p.name, u.name) AS passenger_name')->get();
 
-        return view('staff', compact('flights', 'manifest'));
+        return view('staff-dashboard', $data);
     }
 
     public function role(Request $r, int $id)

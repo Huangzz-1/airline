@@ -13,6 +13,21 @@ use Illuminate\Validation\Rules\Password;
 
 class AccountController extends Controller
 {
+    public function index(Request $r)
+    {
+        Access::role($r->user(), 'admin');
+        $d = $r->validate(['q' => 'nullable|string|max:100']);
+        $users = User::query()
+            ->when($d['q'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$term.'%')->orWhere('email', 'like', '%'.$term.'%')))
+            ->orderBy('id')->paginate(15)->withQueryString();
+
+        return view('admin', [
+            'users' => $users,
+            'airports' => DB::connection('ops')->table('airports')->get(),
+            'logs' => DB::table('audit_logs')->latest('id')->limit(20)->get(),
+        ]);
+    }
+
     public function connections(Request $r)
     {
         Access::role($r->user(), 'admin');

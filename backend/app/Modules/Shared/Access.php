@@ -10,9 +10,23 @@ final class Access
 
     const SCOPED = ['airport_agent', 'operations', 'ops_manager', 'ground_agent', 'integration_admin'];
 
+    public static function allows(User $u, string ...$roles): bool
+    {
+        if ($u->role === 'admin') {
+            return ! $roles || count(array_filter($roles, fn (string $role) => $role !== 'passenger')) > 0;
+        }
+
+        return in_array($u->role, $roles, true);
+    }
+
+    public static function isAdmin(User $u): bool
+    {
+        return $u->role === 'admin';
+    }
+
     public static function role(User $u, string ...$roles): void
     {
-        abort_unless(in_array($u->role, $roles, true), 403, 'Không có quyền thực hiện.');
+        abort_unless(self::allows($u, ...$roles), 403, 'Không đủ thẩm quyền.');
     }
 
     public static function airport(User $u, string $code): void

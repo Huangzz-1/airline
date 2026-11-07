@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Booking\CommerceRepository;
 use App\Modules\Flights\FlightCatalog;
 use App\Modules\Shared\Audit;
+use App\Modules\Shared\Access;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -55,10 +56,10 @@ class BoardingService
 
     public function board(User $agent, int $flight, string $token): object
     {
-        abort_unless($agent->role === 'airport_agent', 403);
+        abort_unless(in_array($agent->role, ['airport_agent', 'admin'], true), 403);
         $f = $this->catalog->get($flight);
         $departure = Carbon::parse($f->departure);
-        abort_unless($agent->airport_code === $f->origin, 403, 'Chuyến ngoài sân bay được phân công.');
+        abort_unless(Access::isAdmin($agent) || $agent->airport_code === $f->origin, 403, 'Chuyến ngoài sân bay được phân công.');
         abort_unless($f->status === 'BOARDING' && now()->gte($departure->copy()->subMinutes(60)) && now()->lt($departure->copy()->subMinutes(10)), 409, 'Cửa chưa mở hoặc đã đóng.');
 
         return DB::transaction(function () use ($agent, $flight, $token) {

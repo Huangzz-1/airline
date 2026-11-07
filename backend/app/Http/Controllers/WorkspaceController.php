@@ -72,6 +72,7 @@ class WorkspaceController extends Controller
         }
         $meta = self::sections()[$section] ?? abort(404);
         $u = $r->user();
+        $isAdmin = Access::isAdmin($u);
         Access::role($u, ...$meta[1]);
         $r->validate(['q' => 'nullable|string|max:100', 'page' => 'nullable|integer|min:1']);
         $ops = DB::connection('ops');
@@ -111,8 +112,12 @@ class WorkspaceController extends Controller
         }
         if ($section === 'scheduling') {
             $dataset('Lịch và trạng thái khai thác', $this->scopedFlights($u), ['id' => 'ID', 'number' => 'Số hiệu', 'origin' => 'Đi', 'destination' => 'Đến', 'departure' => 'Khởi hành UTC+7', 'arrival' => 'Đến UTC+7', 'aircraft_id' => 'Tàu bay', 'status' => 'Trạng thái', 'gate' => 'Cửa', 'version' => 'Phiên bản']);
-            if ($u->role === 'operations') {
-                $routes = $ops->table('routes')->where('origin', $u->airport_code)->where('active', true)->get()->mapWithKeys(fn ($x) => [$x->id => $x->origin.'→'.$x->destination])->all();
+            if ($u->role === 'operations' || $isAdmin) {
+                $routeQuery = $ops->table('routes')->where('active', true);
+                if (! $isAdmin) {
+                    $routeQuery->where('origin', $u->airport_code);
+                }
+                $routes = $routeQuery->get()->mapWithKeys(fn ($x) => [$x->id => $x->origin.'→'.$x->destination])->all();
                 $planes = $ops->table('aircraft')->where('status', 'AVAILABLE')->pluck('registration', 'id')->all();
                 $form('schedule', 'Lập lịch nháp', [$f('number', 'Số hiệu (ví dụ AS201)'), $f('route_id', 'Đường bay', 'select', $routes), $f('aircraft_id', 'Tàu bay', 'select', $planes), $f('departure', 'Khởi hành (giờ Việt Nam)', 'datetime-local'), $f('arrival', 'Hạ cánh (giờ Việt Nam)', 'datetime-local'), $f('sale_price', 'Giá VND', 'number'), $f('gate', 'Cửa dự kiến')]);
                 $form('season', 'Lập lịch lặp theo kỳ (mỗi đợt tối đa 31 ngày)', [$f('number', 'Số hiệu chuyến'), $f('route_id', 'Đường bay', 'select', $routes), $f('aircraft_id', 'Tàu bay', 'select', $planes), $f('from_date', 'Ngày bắt đầu', 'date'), $f('to_date', 'Ngày kết thúc', 'date'), $f('weekdays', 'Ngày trong tuần: 1=Thứ hai…7=Chủ nhật (ví dụ 1,3,5)'), $f('local_departure', 'Giờ địa phương tại sân bay đi', 'time'), $f('duration_minutes', 'Thời lượng phút', 'number'), $f('sale_price', 'Giá VND', 'number'), $f('gate', 'Cửa dự kiến')]);
@@ -123,7 +128,7 @@ class WorkspaceController extends Controller
                 $form('publish', 'Phê duyệt và công bố', [$f('flight_id', 'Chuyến chờ duyệt', 'select', $flights)]);
             }
         }
-        if ($section === 'scheduling' && $u->role === 'ops_manager') {
+        if ($section === 'scheduling' && ($u->role === 'ops_manager' || $isAdmin)) {
             $form('publish_batch', 'Duyệt và công bố cả đợt', [$f('flight_ids', 'Danh sách ID cách nhau dấu phẩy (tối đa 31)')]);
         }
         if ($section === 'crew') {
@@ -141,48 +146,54 @@ class WorkspaceController extends Controller
         }
         if ($section === 'resources') {
             $dataset('Lịch tài nguyên', $ops->table('resource_allocations')->whereIn('flight_id', array_keys($flights)), ['id' => 'ID', 'flight_id' => 'Chuyến', 'resource_id' => 'Tài nguyên', 'starts_at' => 'Từ UTC+7', 'ends_at' => 'Đến UTC+7', 'reason' => 'Lý do']);
-            $form('allocate', 'Phân bổ — không cho phép giao thời gian', [$f('flight_id', 'Chuyến', 'select', $flights), $f('resource_id', 'Tài nguyên', 'select', $ops->table('airport_resources')->where('airport_code', $u->airport_code)->where('active', true)->pluck('code', 'id')->all()), $f('starts_at', 'Bắt đầu (giờ Việt Nam)', 'datetime-local'), $f('ends_at', 'Kết thúc (giờ Việt Nam)', 'datetime-local'), $f('reason', 'Lý do')]);
+            $resourceQuery = $ops->table('airport_resources')->where('active', true);
+            if (! $isAdmin) {
+                $resourceQuery->where('airport_code', $u->airport_code);
+            }
+            $form('allocate', 'Phân bổ — không cho phép giao thời gian', [$f('flight_id', 'Chuyến', 'select', $flights), $f('resource_id', 'Tài nguyên', 'select', $resourceQuery->pluck('code', 'id')->all()), $f('starts_at', 'Bắt đầu (giờ Việt Nam)', 'datetime-local'), $f('ends_at', 'Kết thúc (giờ Việt Nam)', 'datetime-local'), $f('reason', 'Lý do')]);
             $form('unallocate', 'Gỡ phân bổ trước điều phối lại', [$f('allocation_id', 'ID phân bổ', 'number'), $f('reason', 'Lý do')]);
         }
         if ($section === 'ground') {
             $q = $ops->table('ground_tasks');
-            if ($u->role === 'ground_agent') {
+            if ($u->role === 'ground_agent' && ! $isAdmin) {
                 $q->where('assigned_to', $u->id);
             } else {
                 $q->whereIn('flight_id', array_keys($flights));
             }
             $dataset('Nhiệm vụ & SLA', $q, ['id' => 'ID', 'flight_id' => 'Chuyến', 'title' => 'Nhiệm vụ', 'assigned_to' => 'Nhân viên', 'due_at' => 'SLA UTC+7', 'status' => 'Trạng thái', 'evidence' => 'Bằng chứng']);
-            if ($u->role === 'operations') {
-                $form('ground_task', 'Giao nhiệm vụ', [$f('flight_id', 'Chuyến', 'select', $flights), $f('title', 'Nhiệm vụ'), $f('assigned_to', 'Nhân viên', 'select', User::where('role', 'ground_agent')->where('airport_code', $u->airport_code)->pluck('name', 'id')->all()), $f('due_at', 'SLA (giờ Việt Nam)', 'datetime-local'), $f('mandatory', 'Bắt buộc', 'select', [1 => 'Có', 0 => 'Không'])]);
-            } else {
+            if ($u->role === 'operations' || $isAdmin) {
+                $form('ground_task', 'Giao nhiệm vụ', [$f('flight_id', 'Chuyến', 'select', $flights), $f('title', 'Nhiệm vụ'), $f('assigned_to', 'Nhân viên', 'select', User::where('role', 'ground_agent')->when(! $isAdmin, fn ($q) => $q->where('airport_code', $u->airport_code))->pluck('name', 'id')->all()), $f('due_at', 'SLA (giờ Việt Nam)', 'datetime-local'), $f('mandatory', 'Bắt buộc', 'select', [1 => 'Có', 0 => 'Không'])]);
+            }
+            if ($u->role === 'ground_agent' || $isAdmin) {
                 $form('ground_state', 'Cập nhật nhiệm vụ của tôi', [$f('task_id', 'ID nhiệm vụ', 'number'), $f('status', 'Trạng thái', 'select', ['IN_PROGRESS' => 'Bắt đầu', 'COMPLETED' => 'Hoàn tất']), $f('evidence', 'Bằng chứng / ghi chú', 'textarea-optional')]);
             }
         }
         if ($section === 'disruptions') {
             $dataset('Phương án xử lý gián đoạn', $ops->table('disruptions')->whereIn('flight_id', array_keys($flights)), ['id' => 'ID', 'flight_id' => 'Chuyến', 'type' => 'Loại', 'reason' => 'Nguyên nhân', 'delay_minutes' => 'Phút trễ', 'status' => 'Phê duyệt', 'created_by' => 'Người lập', 'approved_by' => 'Người duyệt']);
-            if ($u->role === 'operations') {
+            if ($u->role === 'operations' || $isAdmin) {
                 $form('disruption', 'Lập phương án', [$f('flight_id', 'Chuyến', 'select', $flights), $f('type', 'Loại', 'select', ['DELAY' => 'Trễ chuyến', 'CANCEL' => 'Hủy chuyến']), $f('delay_minutes', 'Số phút trễ (hủy nhập 0)', 'number'), $f('reason', 'Lý do')]);
-            } else {
+            }
+            if ($u->role === 'ops_manager' || $isAdmin) {
                 $form('approve_disruption', 'Phê duyệt — đánh giá tác động trước khi xác nhận', [$f('disruption_id', 'ID phương án', 'number')]);
             }
         }
         if ($section === 'recovery') {
             $q = $ops->table('flight_changes')->whereIn('flight_id', array_keys($flights));
             $dataset('Phương án đổi nguồn lực', $q, ['id' => 'Mã phương án', 'flight_id' => 'Chuyến', 'kind' => 'Loại', 'status' => 'Tiến độ', 'reason' => 'Lý do', 'failure_reason' => 'Kết quả kiểm tra', 'created_by' => 'Người lập', 'approved_by' => 'Người duyệt']);
-            if ($u->role === 'operations') {
+            if ($u->role === 'operations' || $isAdmin) {
                 $form('resource_propose', 'Đề nghị đổi tàu bay', [$f('kind', '', 'hidden', ['value' => 'AIRCRAFT']), $f('flight_id', 'Chuyến', 'select', $flights), $f('target_aircraft_id', 'Tàu mới', 'select', $ops->table('aircraft')->where('status', 'AVAILABLE')->get()->mapWithKeys(fn ($a) => [$a->id => $a->registration.' · '.$a->type.' · '.$a->capacity.' ghế'])->all()), $f('reason', 'Lý do đổi tàu')]);
             }
-            if ($u->role === 'crew_scheduler') {
+            if ($u->role === 'crew_scheduler' || $isAdmin) {
                 $dataset('Nhân sự và năng định', $ops->table('crew_members'), ['id' => 'ID nhân sự', 'name' => 'Họ tên', 'position' => 'Vị trí', 'qualification' => 'Năng định', 'license_expires' => 'Hạn giấy phép', 'available' => 'Khả dụng']);
                 $form('resource_propose', 'Đề nghị thay tổ bay', [$f('kind', '', 'hidden', ['value' => 'CREW']), $f('flight_id', 'Chuyến', 'select', $flights), $f('crew_ids', 'Toàn bộ ID tổ bay mới, cách dấu phẩy'), $f('reason', 'Lý do thay thế')]);
             }
-            if ($u->role === 'ops_manager') {
+            if ($u->role === 'ops_manager' || $isAdmin) {
                 $form('resource_decide', 'Phê duyệt đổi nguồn lực', [$f('change_id', 'Phương án', 'select', $ops->table('flight_changes')->whereIn('flight_id', array_keys($flights))->where('status', 'PENDING')->get()->mapWithKeys(fn ($p) => [$p->id => $p->kind.' · chuyến '.$p->flight_id.' · '.$p->reason])->all()), $f('approve', 'Quyết định', 'select', [1 => 'Chấp thuận', 0 => 'Từ chối'])]);
             }
         }
         if ($section === 'baggage') {
                 $form('offload', 'Ghi nhận hành khách không đến và dỡ hành lý', [$f('booking_id', 'Mã đặt chỗ (UUID)'), $f('reason', 'Bằng chứng / lý do xác nhận dỡ hành lý', 'textarea')]);
-            $ids = $ops->table('flights')->where('origin', $u->airport_code)->orWhere('destination', $u->airport_code)->pluck('id');
+            $ids = $isAdmin ? $ops->table('flights')->pluck('id') : $ops->table('flights')->where('origin', $u->airport_code)->orWhere('destination', $u->airport_code)->pluck('id');
             $bookings = DB::table('bookings')->whereIn('flight_id', $ids)->pluck('id');
                 $dataset('Hành lý thuộc sân bay', $q = DB::table('baggage')->whereIn('booking_id', $bookings), ['id' => 'ID', 'tag' => 'Mã thẻ hành lý', 'booking_id' => 'Mã đặt chỗ', 'weight' => 'Khối lượng (kg)', 'status' => 'Trạng thái', 'custody' => 'Đang giữ']);
                 $form('bag_tag', 'Tạo thẻ hành lý', [$f('booking_id', 'Hành khách / mã đặt chỗ (UUID)'), $f('weight', 'Trọng lượng kg', 'number'), $f('request_id', 'request_id', 'uuid')]);
@@ -221,11 +232,16 @@ class WorkspaceController extends Controller
             $form('fare', 'Điều chỉnh giá / đóng mở bán', [$f('flight_id', 'ID chuyến', 'number'), $f('price', 'Giá VND', 'number'), $f('capacity', 'Tồn tối đa (không vượt tàu bay)', 'number'), $f('status', 'Trạng thái', 'select', ['OPEN' => 'Mở bán', 'CLOSED' => 'Đóng bán']), $f('reason', 'Lý do')]);
         }
         if ($section === 'iot') {
-            $devices = $ops->table('devices')->where('airport_code', $u->airport_code);
+            $devices = $ops->table('devices');
+            if (! $isAdmin) {
+                $devices->where('airport_code', $u->airport_code);
+            }
             $dataset('Danh sách thiết bị', clone $devices, ['id' => 'ID', 'code' => 'Mã', 'threshold' => 'Ngưỡng cảnh báo', 'last_sequence' => 'Sequence mới nhất', 'latest_value' => 'Giá trị', 'last_event_at' => 'Event time UTC+7']);
             $dataset('Telemetry / sự kiện đến trễ', $ops->table('telemetry')->whereIn('device_id', $devices->pluck('id')), ['id' => 'Event ID', 'device_id' => 'Thiết bị', 'sequence' => 'Sequence', 'value' => 'Giá trị', 'event_time' => 'Event time UTC+7', 'received_at' => 'Nhận UTC+7', 'late' => 'Đến trễ', 'alert' => 'Cảnh báo']);
-            $form('device', 'Đăng ký thiết bị', [$f('code', 'Mã thiết bị'), $f('airport_code', 'Sân bay', 'select', [$u->airport_code => $u->airport_code]), $f('threshold', 'Ngưỡng', 'number')]);
-            $form('telemetry', 'Ghi nhận số liệu thiết bị', [$f('event_id', 'Event ID', 'uuid'), $f('device_id', 'Thiết bị', 'select', $ops->table('devices')->where('airport_code', $u->airport_code)->pluck('code', 'id')->all()), $f('sequence', 'Sequence', 'number'), $f('value', 'Giá trị', 'number'), $f('event_time', 'Event time (giờ Việt Nam)', 'datetime-local')]);
+            $airportOptions = $isAdmin ? $ops->table('airports')->pluck('code', 'code')->all() : [$u->airport_code => $u->airport_code];
+            $deviceOptions = (clone $devices)->pluck('code', 'id')->all();
+            $form('device', 'Đăng ký thiết bị', [$f('code', 'Mã thiết bị'), $f('airport_code', 'Sân bay', 'select', $airportOptions), $f('threshold', 'Ngưỡng cảnh báo', 'number')]);
+            $form('telemetry', 'Ghi nhận số liệu thiết bị', [$f('event_id', 'Event ID', 'uuid'), $f('device_id', 'Thiết bị', 'select', $deviceOptions), $f('sequence', 'Sequence', 'number'), $f('value', 'Giá trị', 'number'), $f('event_time', 'Event time (giờ Việt Nam)', 'datetime-local')]);
         }
         if ($section === 'analytics') {
             $source = $this->scopedFlights($u)->where('departure', '>=', now()->subDays(30))->get();

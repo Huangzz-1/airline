@@ -242,3 +242,11 @@ body.app-body::selection { background: rgba(22, 119, 255, .18); }
     .public-app .nav-links { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
     .public-app .nav-links > a:not(.btn) { display: inline-flex; }
 }
+
+.dashboard-action.is-locked { opacity: .72; border-style: dashed; }
+.dashboard-action.is-locked .dashboard-action-arrow { color: var(--muted-text, #64748b); }
+.dashboard-action-copy small { display:block; margin-top:.35rem; font-weight:600; }
+
+.sidebar-link.is-locked { opacity: .62; }
+.sidebar-link.is-locked small { margin-left:auto; font-size:.75rem; }
+.dashboard-subpanel { margin-top: 1.5rem; }

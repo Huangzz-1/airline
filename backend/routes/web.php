@@ -173,6 +173,7 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
     Route::post('/staff/passengers/{id}/checkin', [PassengerDeskController::class, 'checkin'])->middleware('role:airport_agent')->whereUuid('id');
     Route::get('/journeys/{id}/ticket', [TravelDocumentController::class, 'show'])->whereUuid('id');
     Route::get('/journeys/{id}/boarding-pass', [TravelDocumentController::class, 'show'])->whereUuid('id')->defaults('kind', 'boarding-pass');
+    Route::get('/admin/users', [AccountController::class, 'index'])->middleware('role:admin');
     Route::post('/admin/users', [AccountController::class, 'create'])->middleware('role:admin');
     Route::get('/admin/connections', [AccountController::class, 'connections'])->middleware('role:admin');
     Route::post('/admin/users/{id}/access', [AccountController::class, 'access'])->middleware('role:admin')->whereNumber('id');
